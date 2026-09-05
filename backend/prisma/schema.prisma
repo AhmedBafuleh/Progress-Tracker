@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  loginId      String   @unique @map("login_id")
+  fullName     String   @map("full_name")
+  passwordHash String   @map("password_hash")
+  role         Role
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  studentProfile     Student?           @relation("StudentUser")
+  taughtHalaqahs     Halaqah[]          @relation("HalaqahTeacher")
+  recordedProgress   ProgressEntry[]    @relation("ProgressTeacher")
+  parentLinks         ParentStudent[]    @relation("ParentUser")
+  createdActivities  Activity[]         @relation("ActivityAuthor")
+
+  @@map("users")
+}
+
+model Student {
+  id         String   @id @default(cuid())
+  userId     String   @unique @map("user_id")
+  halaqahId  String   @map("halaqah_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user        User                  @relation("StudentUser", fields: [userId], references: [id], onDelete: Cascade)
+  halaqah     Halaqah               @relation(fields: [halaqahId], references: [id])
+  dormitory   DormitoryAssignment?
+  progress    ProgressEntry[]
+  parentLinks ParentStudent[]
+
+  @@index([halaqahId])
+  @@map("students")
+}
+
+model Halaqah {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  teacherId String?  @map("teacher_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  teacher User?     @relation("HalaqahTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+  students Student[]
+
+  @@index([teacherId])
+  @@map("halaqahs")
+}
+
+model DormitoryAssignment {
+  id        String   @id @default(cuid())
+  studentId String   @unique @map("student_id")
+  building  String
+  room      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("dormitory_assignments")
+}
+
+model ParentStudent {
+  id        String   @id @default(cuid())
+  parentId  String   @map("parent_id")
+  studentId String   @map("student_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  parent  User    @relation("ParentUser", fields: [parentId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, studentId])
+  @@index([studentId])
+  @@map("parent_students")
+}
+
+model SchedulePeriod {
+  id        String   @id @default(cuid())
+  number    Int      @unique
+  name      String
+  startTime String   @map("start_time")
+  endTime   String   @map("end_time")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  progress ProgressEntry[]
+
+  @@map("schedule_periods")
+}
+
+model ProgressEntry {
+  id          String   @id @default(cuid())
+  studentId   String   @map("student_id")
+  teacherId   String   @map("teacher_id")
+  periodId    String   @map("period_id")
+  surah       String
+  verseFrom   Int      @map("verse_from")
+  verseTo     Int      @map("verse_to")
+  pages       Decimal  @db.Decimal(5, 2)
+  rating      Int
+  recordDate  DateTime @db.Date @map("record_date")
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher User           @relation("ProgressTeacher", fields: [teacherId], references: [id])
+  period  SchedulePeriod @relation(fields: [periodId], references: [id])
+
+  @@index([studentId, recordDate])
+  @@index([teacherId, recordDate])
+  @@map("progress_entries")
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  authorId  String   @map("author_id")
+  published Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  author User @relation("ActivityAuthor", fields: [authorId], references: [id])
+
+  @@index([createdAt])
+  @@map("activities")
+}
