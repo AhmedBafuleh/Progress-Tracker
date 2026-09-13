@@ -221,4 +221,55 @@ router.patch('/users/:id/password', requireRole(Role.ADMIN, Role.MANAGER), async
   }
 });
 
+router.delete('/users/:id', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
+  try {
+    const target = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        loginId: true,
+        role: true,
+        _count: {
+          select: {
+            recordedProgress: true,
+            createdActivities: true,
+          },
+        },
+      },
+    });
+
+    if (!target) throw new AppError('الحساب غير موجود', 404, 'USER_NOT_FOUND');
+
+    if (target.role === Role.ADMIN) {
+      throw new AppError('لا يمكن حذف حساب مدير النظام', 403, 'ADMIN_ACCOUNT_PROTECTED');
+    }
+
+    if (req.authUser?.role === Role.MANAGER && target.role === Role.MANAGER) {
+      throw new AppError('لا يمكن للمشرف حذف حساب مشرف آخر', 403, 'FORBIDDEN');
+    }
+
+    if (target._count.recordedProgress > 0) {
+      throw new AppError(
+        'لا يمكن حذف هذا الحساب لأنه مرتبط بسجلات تقدم محفوظة. يجب الاحتفاظ بالسجل الأكاديمي.',
+        409,
+        'ACCOUNT_HAS_PROGRESS_HISTORY',
+      );
+    }
+
+    if (target._count.createdActivities > 0) {
+      throw new AppError(
+        'لا يمكن حذف هذا الحساب لأنه مرتبط بمنشورات أو أنشطة محفوظة.',
+        409,
+        'ACCOUNT_HAS_ACTIVITY_HISTORY',
+      );
+    }
+
+    await prisma.user.delete({ where: { id: target.id } });
+
+    res.json({ message: `تم حذف الحساب ${target.loginId} نهائيًا` });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
