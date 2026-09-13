@@ -169,6 +169,7 @@ function ManagementPage({ user, onLogout, mode }: { user: SessionUser | null; on
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [newHalaqah, setNewHalaqah] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ loginId: '', fullName: '', password: '', role: 'STUDENT' as CreatableRole, halaqahId: '', building: '', room: '' });
 
   const isAdmin = mode === 'ADMIN';
@@ -209,6 +210,7 @@ function ManagementPage({ user, onLogout, mode }: { user: SessionUser | null; on
       });
       setNotice('تم إنشاء الحساب وحفظ البيانات بنجاح');
       setForm({ loginId: '', fullName: '', password: '', role: 'STUDENT', halaqahId: '', building: '', room: '' });
+      setShowPassword(false);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'تعذر إنشاء الحساب');
@@ -243,12 +245,33 @@ function ManagementPage({ user, onLogout, mode }: { user: SessionUser | null; on
     }
   }
 
+  async function deleteAccount(entry: ManagedUser) {
+    const confirmed = window.confirm(`هل أنت متأكد من حذف حساب ${entry.fullName} (${entry.loginId}) نهائيًا؟\n\nلا يمكن التراجع عن هذا الإجراء.`);
+    if (!confirmed) return;
+
+    setError('');
+    setNotice('');
+    try {
+      const result = await api.deleteUser(entry.id);
+      setNotice(result.message);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'تعذر حذف الحساب');
+    }
+  }
+
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== mode) return <Navigate to={user.role === 'ADMIN' ? '/admin' : user.role === 'MANAGER' ? '/manager' : '/under-development'} replace />;
 
   const roleCount = useMemo(() => users.filter((entry) => entry.role !== 'ADMIN').length, [users]);
 
   function canManageCredential(entry: ManagedUser) {
+    if (entry.role === 'ADMIN') return false;
+    if (!isAdmin && entry.role === 'MANAGER') return false;
+    return true;
+  }
+
+  function canDeleteAccount(entry: ManagedUser) {
     if (entry.role === 'ADMIN') return false;
     if (!isAdmin && entry.role === 'MANAGER') return false;
     return true;
@@ -308,7 +331,29 @@ function ManagementPage({ user, onLogout, mode }: { user: SessionUser | null; on
             </label>
             <label>الاسم الكامل<input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required /></label>
             <label>معرف المستخدم<input value={form.loginId} onChange={(e) => setForm({ ...form, loginId: e.target.value })} required /></label>
-            <label>كلمة المرور<input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} minLength={8} required /></label>
+            <label>كلمة المرور
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  style={{ flex: 1 }}
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  minLength={8}
+                  required
+                  autoComplete="new-password"
+                />
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                  title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                  style={{ minWidth: '46px', padding: '10px 12px' }}
+                >
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+            </label>
             {isStudent && <>
               <label>الحلقة<select value={form.halaqahId} onChange={(e) => setForm({ ...form, halaqahId: e.target.value })} required><option value="">اختر الحلقة</option>{halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
               <label>المبنى<input value={form.building} onChange={(e) => setForm({ ...form, building: e.target.value })} required /></label>
@@ -322,7 +367,7 @@ function ManagementPage({ user, onLogout, mode }: { user: SessionUser | null; on
           <div className="panel-heading"><div><span>قاعدة البيانات</span><h2>الحسابات المسجلة</h2></div></div>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>الاسم</th><th>المعرف</th><th>الدور</th><th>الحالة</th><th>إجراءات الدخول</th></tr></thead>
+              <thead><tr><th>الاسم</th><th>المعرف</th><th>الدور</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
               <tbody>
                 {users.map((entry) => (
                   <tr key={entry.id}>
@@ -331,12 +376,23 @@ function ManagementPage({ user, onLogout, mode }: { user: SessionUser | null; on
                     <td>{roleLabels[entry.role]}</td>
                     <td><span className="status-chip">{entry.isActive ? 'نشط' : 'موقوف'}</span></td>
                     <td>
-                      {canManageCredential(entry) ? (
-                        <div className="hero-actions">
+                      <div className="hero-actions">
+                        {canManageCredential(entry) && <>
                           <button className="secondary-button" type="button" onClick={() => void revealCredential(entry)} disabled={!entry.passwordAvailable}>عرض كلمة المرور</button>
                           <button className="secondary-button" type="button" onClick={() => void resetPassword(entry)}>إعادة تعيين</button>
-                        </div>
-                      ) : <span>محمي</span>}
+                        </>}
+                        {canDeleteAccount(entry) && (
+                          <button
+                            className="secondary-button"
+                            type="button"
+                            onClick={() => void deleteAccount(entry)}
+                            style={{ color: '#b42318', borderColor: '#f0b4ae' }}
+                          >
+                            حذف الحساب
+                          </button>
+                        )}
+                        {!canManageCredential(entry) && !canDeleteAccount(entry) && <span>محمي</span>}
+                      </div>
                     </td>
                   </tr>
                 ))}
