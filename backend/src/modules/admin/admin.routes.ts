@@ -5,16 +5,17 @@ import { z } from 'zod';
 import { prisma } from '../../config/prisma.js';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { AppError } from '../../shared/AppError.js';
+import { decryptPassword, encryptPassword } from '../../shared/passwordCipher.js';
 
 const router = Router();
-router.use(requireAuth, requireRole(Role.ADMIN));
+router.use(requireAuth);
 
 const createHalaqahSchema = z.object({
   name: z.string().trim().min(2),
   teacherId: z.string().cuid().optional(),
 });
 
-router.get('/halaqahs', async (_req, res, next) => {
+router.get('/halaqahs', requireRole(Role.ADMIN), async (_req, res, next) => {
   try {
     const halaqahs = await prisma.halaqah.findMany({
       orderBy: { name: 'asc' },
@@ -29,7 +30,7 @@ router.get('/halaqahs', async (_req, res, next) => {
   }
 });
 
-router.post('/halaqahs', async (req, res, next) => {
+router.post('/halaqahs', requireRole(Role.ADMIN), async (req, res, next) => {
   try {
     const input = createHalaqahSchema.parse(req.body);
 
@@ -57,7 +58,7 @@ const baseUserSchema = z.object({
   room: z.string().trim().min(1).max(100).optional(),
 });
 
-router.post('/users', async (req, res, next) => {
+router.post('/users', requireRole(Role.ADMIN), async (req, res, next) => {
   try {
     const input = baseUserSchema.parse(req.body);
 
@@ -78,6 +79,7 @@ router.post('/users', async (req, res, next) => {
     }
 
     const passwordHash = await bcrypt.hash(input.password, 12);
+    const credentialCiphertext = encryptPassword(input.password);
 
     const created = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -85,6 +87,7 @@ router.post('/users', async (req, res, next) => {
           loginId: input.loginId,
           fullName: input.fullName,
           passwordHash,
+          credentialCiphertext,
           role: input.role as Role,
         },
         select: { id: true, loginId: true, fullName: true, role: true, isActive: true, createdAt: true },
@@ -119,7 +122,7 @@ router.post('/users', async (req, res, next) => {
   }
 });
 
-router.get('/users', async (_req, res, next) => {
+router.get('/users', requireRole(Role.ADMIN, Role.MANAGER), async (_req, res, next) => {
   try {
     const users = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
@@ -130,6 +133,7 @@ router.get('/users', async (_req, res, next) => {
         role: true,
         isActive: true,
         createdAt: true,
+        credentialCiphertext: true,
         studentProfile: {
           select: {
             halaqah: { select: { id: true, name: true } },
@@ -138,7 +142,72 @@ router.get('/users', async (_req, res, next) => {
         },
       },
     });
-    res.json({ users });
+
+    res.json({
+      users: users.map(({ credentialCiphertext, ...user }) => ({
+        ...user,
+        passwordAvailable: Boolean(credentialCiphertext),
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/users/:id/credential', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
+  try {
+    const target = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { loginId: true, role: true, credentialCiphertext: true },
+    });
+
+    if (!target) throw new AppError('الحساب غير موجود', 404, 'USER_NOT_FOUND');
+    if (req.authUser?.role === Role.MANAGER && target.role === Role.ADMIN) {
+      throw new AppError('لا يمكن للمشرف عرض بيانات دخول مدير النظام', 403, 'FORBIDDEN');
+    }
+    if (!target.credentialCiphertext) {
+      throw new AppError(
+        'كلمة المرور غير متاحة لهذا الحساب. أعد تعيينها أولاً.',
+        409,
+        'CREDENTIAL_UNAVAILABLE',
+      );
+    }
+
+    const password = decryptPassword(target.credentialCiphertext);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ loginId: target.loginId, password });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const resetPasswordSchema = z.object({
+  password: z.string().min(8).max(128),
+});
+
+router.patch('/users/:id/password', requireRole(Role.ADMIN), async (req, res, next) => {
+  try {
+    const { password } = resetPasswordSchema.parse(req.body);
+    const target = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, role: true },
+    });
+
+    if (!target) throw new AppError('الحساب غير موجود', 404, 'USER_NOT_FOUND');
+    if (target.role === Role.ADMIN) {
+      throw new AppError('لا يمكن إعادة تعيين كلمة مرور مدير النظام من هذه الشاشة', 403, 'ADMIN_PASSWORD_PROTECTED');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const credentialCiphertext = encryptPassword(password);
+
+    await prisma.user.update({
+      where: { id: target.id },
+      data: { passwordHash, credentialCiphertext },
+    });
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ message: 'تمت إعادة تعيين كلمة المرور بنجاح' });
   } catch (error) {
     next(error);
   }
