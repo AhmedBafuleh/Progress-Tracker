@@ -15,7 +15,7 @@ const createHalaqahSchema = z.object({
   teacherId: z.string().cuid().optional(),
 });
 
-router.get('/halaqahs', requireRole(Role.ADMIN), async (_req, res, next) => {
+router.get('/halaqahs', requireRole(Role.ADMIN, Role.MANAGER), async (_req, res, next) => {
   try {
     const halaqahs = await prisma.halaqah.findMany({
       orderBy: { name: 'asc' },
@@ -58,9 +58,13 @@ const baseUserSchema = z.object({
   room: z.string().trim().min(1).max(100).optional(),
 });
 
-router.post('/users', requireRole(Role.ADMIN), async (req, res, next) => {
+router.post('/users', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
   try {
     const input = baseUserSchema.parse(req.body);
+
+    if (req.authUser?.role === Role.MANAGER && input.role === Role.MANAGER) {
+      throw new AppError('لا يمكن للمشرف إنشاء حساب مشرف آخر', 403, 'MANAGER_CANNOT_CREATE_MANAGER');
+    }
 
     if (input.role === 'STUDENT' && (!input.halaqahId || !input.building || !input.room)) {
       throw new AppError(
@@ -122,9 +126,10 @@ router.post('/users', requireRole(Role.ADMIN), async (req, res, next) => {
   }
 });
 
-router.get('/users', requireRole(Role.ADMIN, Role.MANAGER), async (_req, res, next) => {
+router.get('/users', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
   try {
     const users = await prisma.user.findMany({
+      where: req.authUser?.role === Role.MANAGER ? { role: { not: Role.ADMIN } } : undefined,
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -162,8 +167,8 @@ router.get('/users/:id/credential', requireRole(Role.ADMIN, Role.MANAGER), async
     });
 
     if (!target) throw new AppError('الحساب غير موجود', 404, 'USER_NOT_FOUND');
-    if (req.authUser?.role === Role.MANAGER && target.role === Role.ADMIN) {
-      throw new AppError('لا يمكن للمشرف عرض بيانات دخول مدير النظام', 403, 'FORBIDDEN');
+    if (req.authUser?.role === Role.MANAGER && (target.role === Role.ADMIN || target.role === Role.MANAGER)) {
+      throw new AppError('لا يمكن للمشرف عرض بيانات دخول هذا الحساب', 403, 'FORBIDDEN');
     }
     if (!target.credentialCiphertext) {
       throw new AppError(
@@ -185,7 +190,7 @@ const resetPasswordSchema = z.object({
   password: z.string().min(8).max(128),
 });
 
-router.patch('/users/:id/password', requireRole(Role.ADMIN), async (req, res, next) => {
+router.patch('/users/:id/password', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
   try {
     const { password } = resetPasswordSchema.parse(req.body);
     const target = await prisma.user.findUnique({
@@ -196,6 +201,9 @@ router.patch('/users/:id/password', requireRole(Role.ADMIN), async (req, res, ne
     if (!target) throw new AppError('الحساب غير موجود', 404, 'USER_NOT_FOUND');
     if (target.role === Role.ADMIN) {
       throw new AppError('لا يمكن إعادة تعيين كلمة مرور مدير النظام من هذه الشاشة', 403, 'ADMIN_PASSWORD_PROTECTED');
+    }
+    if (req.authUser?.role === Role.MANAGER && target.role === Role.MANAGER) {
+      throw new AppError('لا يمكن للمشرف إعادة تعيين كلمة مرور مشرف آخر', 403, 'FORBIDDEN');
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
