@@ -16,14 +16,15 @@ enum Role {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  loginId      String   @unique @map("login_id")
-  fullName     String   @map("full_name")
-  passwordHash String   @map("password_hash")
-  role         Role
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                   String   @id @default(cuid())
+  loginId              String   @unique @map("login_id")
+  fullName             String   @map("full_name")
+  passwordHash         String   @map("password_hash")
+  credentialCiphertext String?  @map("credential_ciphertext")
+  role                 Role
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   studentProfile     Student?           @relation("StudentUser")
   taughtHalaqahs     Halaqah[]          @relation("HalaqahTeacher")
