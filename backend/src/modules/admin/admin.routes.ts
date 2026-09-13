@@ -10,6 +10,8 @@ import { decryptPassword, encryptPassword } from '../../shared/passwordCipher.js
 const router = Router();
 router.use(requireAuth);
 
+const userIdSchema = z.string().cuid();
+
 const createHalaqahSchema = z.object({
   name: z.string().trim().min(2),
   teacherId: z.string().cuid().optional(),
@@ -161,8 +163,9 @@ router.get('/users', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, nex
 
 router.get('/users/:id/credential', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
   try {
+    const userId = userIdSchema.parse(req.params.id);
     const target = await prisma.user.findUnique({
-      where: { id: req.params.id },
+      where: { id: userId },
       select: { loginId: true, role: true, credentialCiphertext: true },
     });
 
@@ -192,9 +195,10 @@ const resetPasswordSchema = z.object({
 
 router.patch('/users/:id/password', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
   try {
+    const userId = userIdSchema.parse(req.params.id);
     const { password } = resetPasswordSchema.parse(req.body);
     const target = await prisma.user.findUnique({
-      where: { id: req.params.id },
+      where: { id: userId },
       select: { id: true, role: true },
     });
 
@@ -223,8 +227,9 @@ router.patch('/users/:id/password', requireRole(Role.ADMIN, Role.MANAGER), async
 
 router.delete('/users/:id', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
   try {
+    const userId = userIdSchema.parse(req.params.id);
     const target = await prisma.user.findUnique({
-      where: { id: req.params.id },
+      where: { id: userId },
       select: {
         id: true,
         loginId: true,
@@ -233,6 +238,11 @@ router.delete('/users/:id', requireRole(Role.ADMIN, Role.MANAGER), async (req, r
           select: {
             recordedProgress: true,
             createdActivities: true,
+          },
+        },
+        studentProfile: {
+          select: {
+            _count: { select: { progress: true } },
           },
         },
       },
@@ -248,7 +258,10 @@ router.delete('/users/:id', requireRole(Role.ADMIN, Role.MANAGER), async (req, r
       throw new AppError('لا يمكن للمشرف حذف حساب مشرف آخر', 403, 'FORBIDDEN');
     }
 
-    if (target._count.recordedProgress > 0) {
+    const hasProgressHistory =
+      target._count.recordedProgress > 0 || (target.studentProfile?._count.progress ?? 0) > 0;
+
+    if (hasProgressHistory) {
       throw new AppError(
         'لا يمكن حذف هذا الحساب لأنه مرتبط بسجلات تقدم محفوظة. يجب الاحتفاظ بالسجل الأكاديمي.',
         409,
