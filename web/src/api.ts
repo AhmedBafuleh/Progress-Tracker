@@ -15,6 +15,20 @@ export type LoginResponse = {
   dashboardReady: boolean;
 };
 
+export type ManagedUser = {
+  id: string;
+  loginId: string;
+  fullName: string;
+  role: Role;
+  isActive: boolean;
+  createdAt: string;
+  passwordAvailable: boolean;
+  studentProfile?: {
+    halaqah?: { id: string; name: string } | null;
+    dormitory?: { building: string; room: string } | null;
+  } | null;
+};
+
 function getToken() {
   return localStorage.getItem('progress_tracker_token');
 }
@@ -53,7 +67,7 @@ export const api = {
 
   me: () => request<{ user: SessionUser; dashboardReady: boolean }>('/auth/me'),
 
-  listUsers: () => request<{ users: unknown[] }>('/admin/users'),
+  listUsers: () => request<{ users: ManagedUser[] }>('/admin/users'),
 
   listHalaqahs: () => request<{ halaqahs: Array<{ id: string; name: string }> }>('/admin/halaqahs'),
 
@@ -67,5 +81,14 @@ export const api = {
     request<{ message: string }>('/admin/users', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+
+  getCredential: (userId: string) =>
+    request<{ loginId: string; password: string }>(`/admin/users/${userId}/credential`),
+
+  resetPassword: (userId: string, password: string) =>
+    request<{ message: string }>(`/admin/users/${userId}/password`, {
+      method: 'PATCH',
+      body: JSON.stringify({ password }),
     }),
 };
