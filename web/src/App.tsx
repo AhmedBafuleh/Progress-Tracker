@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
-import { api, clearToken, saveToken, type Role, type SessionUser } from './api';
+import { api, clearToken, saveToken, type ManagedUser, type Role, type SessionUser } from './api';
 
 const roleLabels: Record<Role, string> = {
   ADMIN: 'المدير',
@@ -67,7 +67,7 @@ function HomePage() {
         <div className="feature-grid">
           <article className="feature-card"><b>01</b><h3>إدارة مركزية</h3><p>تنظيم المستخدمين والحلقات والسكن من خلال نظام موحد.</p></article>
           <article className="feature-card"><b>02</b><h3>متابعة التقدم</h3><p>تهيئة النظام لتوثيق تقدم الحفظ اليومي حسب السورة والآيات والصفحات والفترة.</p></article>
-          <article className="feature-card"><b>03</b><h3>وصول واضح</h3><p>بوابات مخصصة مستقبلًا للمعلم والطالب وولي الأمر والمشرف.</p></article>
+          <article className="feature-card"><b>03</b><h3>وصول واضح</h3><p>بوابات مخصصة للمدير والمشرف والمعلم والطالب وولي الأمر.</p></article>
         </div>
       </section>
     </PublicLayout>
@@ -95,7 +95,7 @@ function MediaPage() {
     <PublicLayout>
       <section className="page-hero"><span>الإعلام والأنشطة</span><h1>آخر أخبار المركز وأنشطته</h1><p>قناة عامة لعرض الأنشطة والإعلانات المؤسسية.</p></section>
       <section className="content-container media-grid">
-        <article className="media-card"><div className="media-placeholder">صورة النشاط</div><small>نشاط</small><h3>لقاء تحفيزي للطلاب</h3><p>نموذج لمحتوى الأنشطة الذي سيقوم المشرف بإدارته لاحقًا.</p></article>
+        <article className="media-card"><div className="media-placeholder">صورة النشاط</div><small>نشاط</small><h3>لقاء تحفيزي للطلاب</h3><p>نموذج لمحتوى الأنشطة الذي ستقوم الإدارة بإدارته لاحقًا.</p></article>
         <article className="media-card"><div className="media-placeholder">صورة النشاط</div><small>إعلان</small><h3>تنبيه بجدول الحلقات</h3><p>يمكن استخدام الصفحة لنشر الإعلانات والمعلومات العامة للزوار.</p></article>
       </section>
     </PublicLayout>
@@ -117,7 +117,9 @@ function LoginPage({ onLogin }: { onLogin: (user: SessionUser) => void }) {
       const result = await api.login(loginId, password);
       saveToken(result.token);
       onLogin(result.user);
-      navigate(result.dashboardReady ? '/admin' : '/under-development');
+      if (result.user.role === 'ADMIN') navigate('/admin');
+      else if (result.user.role === 'MANAGER') navigate('/manager');
+      else navigate('/under-development');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'تعذر تسجيل الدخول');
     } finally {
@@ -159,72 +161,189 @@ function UnderDevelopmentPage({ user, onLogout }: { user: SessionUser | null; on
 }
 
 type Halaqah = { id: string; name: string };
+type CreatableRole = 'MANAGER' | 'TEACHER' | 'STUDENT' | 'PARENT';
 
-function AdminPage({ user, onLogout }: { user: SessionUser | null; onLogout: () => void }) {
+function ManagementPage({ user, onLogout, mode }: { user: SessionUser | null; onLogout: () => void; mode: 'ADMIN' | 'MANAGER' }) {
   const [halaqahs, setHalaqahs] = useState<Halaqah[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [newHalaqah, setNewHalaqah] = useState('');
-  const [form, setForm] = useState({ loginId: '', fullName: '', password: '', role: 'STUDENT' as Exclude<Role, 'ADMIN'>, halaqahId: '', building: '', room: '' });
+  const [form, setForm] = useState({ loginId: '', fullName: '', password: '', role: 'STUDENT' as CreatableRole, halaqahId: '', building: '', room: '' });
 
+  const isAdmin = mode === 'ADMIN';
   const isStudent = form.role === 'STUDENT';
 
   async function refresh() {
     const [u, h] = await Promise.all([api.listUsers(), api.listHalaqahs()]);
-    setUsers(u.users as any[]);
+    setUsers(u.users);
     setHalaqahs(h.halaqahs);
   }
 
   useEffect(() => { void refresh().catch(() => setError('تعذر تحميل بيانات لوحة التحكم')); }, []);
 
   async function addHalaqah(event: FormEvent) {
-    event.preventDefault(); setError(''); setNotice('');
-    try { await api.createHalaqah(newHalaqah); setNewHalaqah(''); setNotice('تمت إضافة الحلقة بنجاح'); await refresh(); }
-    catch (err) { setError(err instanceof Error ? err.message : 'تعذر إضافة الحلقة'); }
+    event.preventDefault();
+    setError('');
+    setNotice('');
+    try {
+      await api.createHalaqah(newHalaqah);
+      setNewHalaqah('');
+      setNotice('تمت إضافة الحلقة بنجاح');
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'تعذر إضافة الحلقة');
+    }
   }
 
   async function addUser(event: FormEvent) {
-    event.preventDefault(); setError(''); setNotice('');
+    event.preventDefault();
+    setError('');
+    setNotice('');
     try {
-      await api.createUser({ ...form, halaqahId: isStudent ? form.halaqahId : undefined, building: isStudent ? form.building : undefined, room: isStudent ? form.room : undefined });
+      await api.createUser({
+        ...form,
+        halaqahId: isStudent ? form.halaqahId : undefined,
+        building: isStudent ? form.building : undefined,
+        room: isStudent ? form.room : undefined,
+      });
       setNotice('تم إنشاء الحساب وحفظ البيانات بنجاح');
       setForm({ loginId: '', fullName: '', password: '', role: 'STUDENT', halaqahId: '', building: '', room: '' });
       await refresh();
-    } catch (err) { setError(err instanceof Error ? err.message : 'تعذر إنشاء الحساب'); }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'تعذر إنشاء الحساب');
+    }
+  }
+
+  async function revealCredential(entry: ManagedUser) {
+    setError('');
+    try {
+      const credential = await api.getCredential(entry.id);
+      window.alert(`معرف المستخدم: ${credential.loginId}\nكلمة المرور: ${credential.password}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'تعذر عرض كلمة المرور');
+    }
+  }
+
+  async function resetPassword(entry: ManagedUser) {
+    const password = window.prompt(`أدخل كلمة المرور الجديدة للحساب: ${entry.loginId}`);
+    if (!password) return;
+    if (password.length < 8) {
+      setError('يجب أن تتكون كلمة المرور من 8 أحرف على الأقل');
+      return;
+    }
+    setError('');
+    setNotice('');
+    try {
+      const result = await api.resetPassword(entry.id, password);
+      setNotice(result.message);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'تعذر إعادة تعيين كلمة المرور');
+    }
   }
 
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'ADMIN') return <Navigate to="/under-development" replace />;
+  if (user.role !== mode) return <Navigate to={user.role === 'ADMIN' ? '/admin' : user.role === 'MANAGER' ? '/manager' : '/under-development'} replace />;
 
   const roleCount = useMemo(() => users.filter((entry) => entry.role !== 'ADMIN').length, [users]);
+
+  function canManageCredential(entry: ManagedUser) {
+    if (entry.role === 'ADMIN') return false;
+    if (!isAdmin && entry.role === 'MANAGER') return false;
+    return true;
+  }
 
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
-        <div className="brand admin-brand"><div className="brand-mark">ق</div><div><strong>مركز التحفيظ</strong><span>لوحة الإدارة</span></div></div>
-        <nav><a className="active">نظرة عامة</a><a>إدارة المستخدمين</a><a>الحلقات</a><a>السكن</a><a>الجداول والتقارير</a></nav>
+        <div className="brand admin-brand"><div className="brand-mark">ق</div><div><strong>مركز التحفيظ</strong><span>{isAdmin ? 'لوحة الإدارة' : 'لوحة المشرف'}</span></div></div>
+        <nav>
+          <a className="active">نظرة عامة</a>
+          <a>إدارة المستخدمين</a>
+          {isAdmin && <a>الحلقات</a>}
+          <a>المكتبة</a>
+          <a>الإعلام والأنشطة</a>
+          {isAdmin && <a>الصفحة الرئيسية</a>}
+          <a>السكن</a>
+          <a>الجداول والتقارير</a>
+        </nav>
         <button className="sidebar-logout" onClick={onLogout}>تسجيل الخروج</button>
       </aside>
+
       <main className="admin-main">
-        <div className="admin-header"><div><span>مرحبًا بك</span><h1>{user.fullName}</h1></div><div className="admin-avatar">أ</div></div>
-        {notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
-        <div className="stat-grid"><div className="stat-card"><span>الحسابات المسجلة</span><strong>{users.length}</strong></div><div className="stat-card"><span>حسابات الأدوار</span><strong>{roleCount}</strong></div><div className="stat-card"><span>الحلقات</span><strong>{halaqahs.length}</strong></div></div>
+        <div className="admin-header"><div><span>مرحبًا بك</span><h1>{user.fullName}</h1></div><div className="admin-avatar">{isAdmin ? 'أ' : 'م'}</div></div>
+        {notice && <div className="success-box">{notice}</div>}
+        {error && <div className="error-box">{error}</div>}
 
-        <section className="admin-panel"><div className="panel-heading"><div><span>إعداد البيانات</span><h2>إضافة حلقة</h2></div></div><form className="inline-form" onSubmit={addHalaqah}><input value={newHalaqah} onChange={(e) => setNewHalaqah(e.target.value)} placeholder="اسم الحلقة" required /><button className="primary-button">إضافة الحلقة</button></form></section>
+        <div className="stat-grid">
+          <div className="stat-card"><span>الحسابات المسجلة</span><strong>{users.length}</strong></div>
+          <div className="stat-card"><span>حسابات الأدوار</span><strong>{roleCount}</strong></div>
+          <div className="stat-card"><span>الحلقات</span><strong>{halaqahs.length}</strong></div>
+        </div>
 
-        <section className="admin-panel"><div className="panel-heading"><div><span>إدارة الحسابات</span><h2>إضافة مستخدم جديد</h2></div><p>يدعم النموذج الحالي إنشاء المشرف والمعلم والطالب وولي الأمر.</p></div>
+        {isAdmin && (
+          <section className="admin-panel">
+            <div className="panel-heading"><div><span>إعداد البيانات</span><h2>إضافة حلقة</h2></div></div>
+            <form className="inline-form" onSubmit={addHalaqah}>
+              <input value={newHalaqah} onChange={(e) => setNewHalaqah(e.target.value)} placeholder="اسم الحلقة" required />
+              <button className="primary-button">إضافة الحلقة</button>
+            </form>
+          </section>
+        )}
+
+        <section className="admin-panel">
+          <div className="panel-heading">
+            <div><span>إدارة الحسابات</span><h2>إضافة مستخدم جديد</h2></div>
+            <p>{isAdmin ? 'يمكن للمدير إنشاء المشرف والمعلم والطالب وولي الأمر.' : 'يمكن للمشرف إنشاء المعلم والطالب وولي الأمر.'}</p>
+          </div>
           <form className="user-form" onSubmit={addUser}>
-            <label>نوع الحساب<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Exclude<Role, 'ADMIN'> })}><option value="MANAGER">مشرف</option><option value="TEACHER">معلم</option><option value="STUDENT">طالب</option><option value="PARENT">ولي أمر</option></select></label>
+            <label>نوع الحساب
+              <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as CreatableRole })}>
+                {isAdmin && <option value="MANAGER">مشرف</option>}
+                <option value="TEACHER">معلم</option>
+                <option value="STUDENT">طالب</option>
+                <option value="PARENT">ولي أمر</option>
+              </select>
+            </label>
             <label>الاسم الكامل<input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required /></label>
             <label>معرف المستخدم<input value={form.loginId} onChange={(e) => setForm({ ...form, loginId: e.target.value })} required /></label>
             <label>كلمة المرور<input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} minLength={8} required /></label>
-            {isStudent && <><label>الحلقة<select value={form.halaqahId} onChange={(e) => setForm({ ...form, halaqahId: e.target.value })} required><option value="">اختر الحلقة</option>{halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label><label>المبنى<input value={form.building} onChange={(e) => setForm({ ...form, building: e.target.value })} required /></label><label>الغرفة<input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} required /></label></>}
+            {isStudent && <>
+              <label>الحلقة<select value={form.halaqahId} onChange={(e) => setForm({ ...form, halaqahId: e.target.value })} required><option value="">اختر الحلقة</option>{halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
+              <label>المبنى<input value={form.building} onChange={(e) => setForm({ ...form, building: e.target.value })} required /></label>
+              <label>الغرفة<input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} required /></label>
+            </>}
             <div className="form-actions"><button className="primary-button">حفظ الحساب</button></div>
           </form>
         </section>
 
-        <section className="admin-panel"><div className="panel-heading"><div><span>قاعدة البيانات</span><h2>الحسابات المسجلة</h2></div></div><div className="table-wrap"><table><thead><tr><th>الاسم</th><th>المعرف</th><th>الدور</th><th>الحالة</th></tr></thead><tbody>{users.map((entry) => <tr key={entry.id}><td>{entry.fullName}</td><td dir="ltr">{entry.loginId}</td><td>{roleLabels[entry.role as Role]}</td><td><span className="status-chip">{entry.isActive ? 'نشط' : 'موقوف'}</span></td></tr>)}</tbody></table></div></section>
+        <section className="admin-panel">
+          <div className="panel-heading"><div><span>قاعدة البيانات</span><h2>الحسابات المسجلة</h2></div></div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>الاسم</th><th>المعرف</th><th>الدور</th><th>الحالة</th><th>إجراءات الدخول</th></tr></thead>
+              <tbody>
+                {users.map((entry) => (
+                  <tr key={entry.id}>
+                    <td>{entry.fullName}</td>
+                    <td dir="ltr">{entry.loginId}</td>
+                    <td>{roleLabels[entry.role]}</td>
+                    <td><span className="status-chip">{entry.isActive ? 'نشط' : 'موقوف'}</span></td>
+                    <td>
+                      {canManageCredential(entry) ? (
+                        <div className="hero-actions">
+                          <button className="secondary-button" type="button" onClick={() => void revealCredential(entry)} disabled={!entry.passwordAvailable}>عرض كلمة المرور</button>
+                          <button className="secondary-button" type="button" onClick={() => void resetPassword(entry)}>إعادة تعيين</button>
+                        </div>
+                      ) : <span>محمي</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </main>
     </div>
   );
@@ -238,7 +357,11 @@ export default function App() {
     api.me().then((result) => setUser(result.user)).catch(() => clearToken()).finally(() => setChecking(false));
   }, []);
 
-  function logout() { clearToken(); setUser(null); window.location.href = '/'; }
+  function logout() {
+    clearToken();
+    setUser(null);
+    window.location.href = '/';
+  }
 
   if (checking) return <div className="app-loading">جارٍ تحميل النظام...</div>;
 
@@ -248,7 +371,8 @@ export default function App() {
       <Route path="/library" element={<LibraryPage />} />
       <Route path="/media" element={<MediaPage />} />
       <Route path="/login" element={<LoginPage onLogin={setUser} />} />
-      <Route path="/admin" element={<AdminPage user={user} onLogout={logout} />} />
+      <Route path="/admin" element={<ManagementPage user={user} onLogout={logout} mode="ADMIN" />} />
+      <Route path="/manager" element={<ManagementPage user={user} onLogout={logout} mode="MANAGER" />} />
       <Route path="/under-development" element={<UnderDevelopmentPage user={user} onLogout={logout} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
