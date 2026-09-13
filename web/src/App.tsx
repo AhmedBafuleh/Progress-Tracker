@@ -350,7 +350,21 @@ function ManagementPage({ user, onLogout, mode }: { user: SessionUser | null; on
                   title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                   style={{ minWidth: '46px', padding: '10px 12px' }}
                 >
-                  {showPassword ? '🙈' : '👁️'}
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                    <circle cx="12" cy="12" r="2.7" />
+                    {showPassword && <path d="M4 4 20 20" />}
+                  </svg>
                 </button>
               </div>
             </label>
