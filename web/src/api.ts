@@ -91,4 +91,9 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ password }),
     }),
+
+  deleteUser: (userId: string) =>
+    request<{ message: string }>(`/admin/users/${userId}`, {
+      method: 'DELETE',
+    }),
 };
