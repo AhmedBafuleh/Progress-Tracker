@@ -40,7 +40,7 @@ router.post('/login', async (req, res, next) => {
         fullName: user.fullName,
         role: user.role,
       },
-      dashboardReady: user.role === 'ADMIN',
+      dashboardReady: user.role === 'ADMIN' || user.role === 'MANAGER',
     });
   } catch (error) {
     next(error);
@@ -50,7 +50,7 @@ router.post('/login', async (req, res, next) => {
 router.get('/me', requireAuth, (req, res) => {
   res.json({
     user: req.authUser,
-    dashboardReady: req.authUser?.role === 'ADMIN',
+    dashboardReady: req.authUser?.role === 'ADMIN' || req.authUser?.role === 'MANAGER',
   });
 });
 
