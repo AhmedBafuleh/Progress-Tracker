@@ -26,21 +26,21 @@ model User {
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
-  studentProfile     Student?           @relation("StudentUser")
-  taughtHalaqahs     Halaqah[]          @relation("HalaqahTeacher")
-  recordedProgress   ProgressEntry[]    @relation("ProgressTeacher")
-  parentLinks         ParentStudent[]    @relation("ParentUser")
-  createdActivities  Activity[]         @relation("ActivityAuthor")
+  studentProfile    Student?        @relation("StudentUser")
+  taughtHalaqahs    Halaqah[]       @relation("HalaqahTeacher")
+  recordedProgress  ProgressEntry[] @relation("ProgressTeacher")
+  parentLinks       ParentStudent[] @relation("ParentUser")
+  createdActivities Activity[]      @relation("ActivityAuthor")
 
   @@map("users")
 }
 
 model Student {
-  id         String   @id @default(cuid())
-  userId     String   @unique @map("user_id")
-  halaqahId  String   @map("halaqah_id")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  halaqahId String   @map("halaqah_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   user        User                  @relation("StudentUser", fields: [userId], references: [id], onDelete: Cascade)
   halaqah     Halaqah               @relation(fields: [halaqahId], references: [id])
@@ -108,19 +108,19 @@ model SchedulePeriod {
 }
 
 model ProgressEntry {
-  id          String   @id @default(cuid())
-  studentId   String   @map("student_id")
-  teacherId   String   @map("teacher_id")
-  periodId    String   @map("period_id")
-  surah       String
-  verseFrom   Int      @map("verse_from")
-  verseTo     Int      @map("verse_to")
-  pages       Decimal  @db.Decimal(5, 2)
-  rating      Int
-  recordDate  DateTime @db.Date @map("record_date")
-  note        String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id         String   @id @default(cuid())
+  studentId  String   @map("student_id")
+  teacherId  String   @map("teacher_id")
+  periodId   String   @map("period_id")
+  surah      String
+  verseFrom  Int      @map("verse_from")
+  verseTo    Int      @map("verse_to")
+  pages      Decimal  @db.Decimal(5, 2)
+  rating     Int
+  recordDate DateTime @db.Date @map("record_date")
+  note       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   teacher User           @relation("ProgressTeacher", fields: [teacherId], references: [id])
@@ -135,6 +135,8 @@ model Activity {
   id        String   @id @default(cuid())
   title     String
   content   String
+  category  String   @default("نشاط")
+  imageUrl  String?  @map("image_url")
   authorId  String   @map("author_id")
   published Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
@@ -144,4 +146,38 @@ model Activity {
 
   @@index([createdAt])
   @@map("activities")
+}
+
+model HomePageContent {
+  id            String   @id @default("home")
+  eyebrow       String
+  heroTitle     String   @map("hero_title")
+  heroBody      String   @map("hero_body")
+  aboutTitle    String   @map("about_title")
+  aboutBody     String   @map("about_body")
+  feature1Title String   @map("feature1_title")
+  feature1Body  String   @map("feature1_body")
+  feature2Title String   @map("feature2_title")
+  feature2Body  String   @map("feature2_body")
+  feature3Title String   @map("feature3_title")
+  feature3Body  String   @map("feature3_body")
+  calloutTitle  String   @map("callout_title")
+  calloutBody   String   @map("callout_body")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("home_page_content")
+}
+
+model LibraryItem {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  type        String   @default("PDF")
+  url         String
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([createdAt])
+  @@map("library_items")
 }
