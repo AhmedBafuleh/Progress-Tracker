@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma.js';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
@@ -54,7 +54,9 @@ router.get('/periods', async (_req, res, next) => {
 
 router.get('/students', requireRole(Role.ADMIN, Role.MANAGER, Role.TEACHER), async (req, res, next) => {
   try {
-    const where = req.authUser?.role === Role.TEACHER ? { halaqah: { teacherId: req.authUser.id } } : undefined;
+    const where: Prisma.StudentWhereInput | undefined = req.authUser?.role === Role.TEACHER
+      ? { halaqah: { teacherId: req.authUser.id } }
+      : undefined;
     const students = await prisma.student.findMany({
       where,
       orderBy: { user: { fullName: 'asc' } },
@@ -95,7 +97,7 @@ router.get('/children', requireRole(Role.PARENT), async (req, res, next) => {
 router.get('/', async (req, res, next) => {
   try {
     const role = req.authUser!.role;
-    let where: Record<string, unknown> | undefined;
+    let where: Prisma.ProgressEntryWhereInput | undefined;
 
     if (role === Role.TEACHER) {
       where = { student: { halaqah: { teacherId: req.authUser!.id } } };
