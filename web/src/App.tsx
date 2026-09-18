@@ -4,6 +4,7 @@ import {
   api,
   clearToken,
   saveToken,
+  resolveMediaUrl,
   type Activity,
   type Halaqah,
   type HomeContent,
@@ -44,6 +45,18 @@ const initialHome: HomeContent = {
 };
 
 type CreatableRole = 'MANAGER' | 'TEACHER' | 'STUDENT' | 'PARENT';
+
+const accountPrefixes: Record<CreatableRole, string> = {
+  MANAGER: 'MAN',
+  TEACHER: 'TEA',
+  STUDENT: 'STU',
+  PARENT: 'PAR',
+};
+
+function accountPrefix(role: CreatableRole) {
+  return accountPrefixes[role];
+}
+
 type ManagementTab = 'overview' | 'users' | 'halaqahs' | 'parents' | 'library' | 'media' | 'home' | 'schedule' | 'reports';
 
 type NavItem<T extends string> = { id: T; label: string; icon: IconName };
@@ -71,19 +84,30 @@ function averageRating(entries: ProgressEntry[]) {
   return entries.reduce((sum, entry) => sum + entry.rating, 0) / entries.length;
 }
 
-function PublicLayout({ children }: { children: ReactNode }) {
+function BrandLogo() {
+  return <img className="brand-logo" src="/logo.svg" alt="شعار مركز التحفيظ" />;
+}
+
+function PublicLayout({ children, user }: { children: ReactNode; user: SessionUser | null }) {
   return (
     <div className="site-shell">
       <header className="topbar">
         <Link className="brand" to="/">
-          <div className="brand-mark">ق</div>
+          <BrandLogo />
           <div><strong>مركز التحفيظ</strong><span>نظام المتابعة والإدارة</span></div>
         </Link>
         <nav>
           <Link to="/">الرئيسية</Link>
           <Link to="/library">المكتبة</Link>
           <Link to="/media">الإعلام والأنشطة</Link>
-          <Link className="login-link" to="/login">تسجيل الدخول</Link>
+          {user ? (
+            <Link className="account-link" to={routeForRole(user.role)} title="العودة إلى لوحة التحكم">
+              <Icon name="user" size={18} />
+              <span>{user.fullName}</span>
+            </Link>
+          ) : (
+            <Link className="login-link" to="/login">تسجيل الدخول</Link>
+          )}
         </nav>
       </header>
       <main>{children}</main>
@@ -92,7 +116,7 @@ function PublicLayout({ children }: { children: ReactNode }) {
   );
 }
 
-function HomePage() {
+function HomePage({ user }: { user: SessionUser | null }) {
   const [home, setHome] = useState<HomeContent>(initialHome);
 
   useEffect(() => {
@@ -100,7 +124,7 @@ function HomePage() {
   }, []);
 
   return (
-    <PublicLayout>
+    <PublicLayout user={user}>
       <section className="hero">
         <div className="hero-copy">
           <span className="eyebrow">{home.eyebrow}</span>
@@ -132,7 +156,7 @@ function HomePage() {
   );
 }
 
-function LibraryPage() {
+function LibraryPage({ user }: { user: SessionUser | null }) {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -141,7 +165,7 @@ function LibraryPage() {
   }, []);
 
   return (
-    <PublicLayout>
+    <PublicLayout user={user}>
       <section className="page-hero"><span>المكتبة</span><h1>مراجع ومواد تعليمية</h1><p>المواد المرجعية المعتمدة والمتاحة لزوار المركز.</p></section>
       <section className="content-container card-list">
         {loading && <EmptyState title="جارٍ تحميل المكتبة" />}
@@ -158,7 +182,67 @@ function LibraryPage() {
   );
 }
 
-function MediaPage() {
+function MediaSlideshow({ item }: { item: Activity }) {
+  const assets = item.assets?.length
+    ? item.assets
+    : item.imageUrl
+      ? [{ id: 'legacy', kind: 'IMAGE', mimeType: 'image/*', fileName: '', url: item.imageUrl, sortOrder: 0, createdAt: item.createdAt }]
+      : [];
+  const [index, setIndex] = useState(0);
+  const active = assets[Math.min(index, Math.max(assets.length - 1, 0))];
+
+  useEffect(() => {
+    if (index >= assets.length) setIndex(0);
+  }, [assets.length, index]);
+
+  if (!active) {
+    return <div className="media-placeholder"><Icon name="media" size={42} /></div>;
+  }
+
+  const url = resolveMediaUrl(active.url);
+  return (
+    <div className="media-slideshow">
+      {active.kind === 'VIDEO' ? (
+        <video className="media-image" src={url} controls preload="metadata" />
+      ) : (
+        <img className="media-image" src={url} alt={item.title} />
+      )}
+      {assets.length > 1 && (
+        <>
+          <button
+            type="button"
+            className="slideshow-button slideshow-prev"
+            onClick={() => setIndex((current) => (current - 1 + assets.length) % assets.length)}
+            aria-label="الوسائط السابقة"
+          >
+            <Icon name="chevronRight" />
+          </button>
+          <button
+            type="button"
+            className="slideshow-button slideshow-next"
+            onClick={() => setIndex((current) => (current + 1) % assets.length)}
+            aria-label="الوسائط التالية"
+          >
+            <Icon name="chevronLeft" />
+          </button>
+          <div className="slideshow-dots" aria-label="عدد الوسائط">
+            {assets.map((asset, assetIndex) => (
+              <button
+                key={asset.id}
+                type="button"
+                className={assetIndex === index ? 'active' : ''}
+                onClick={() => setIndex(assetIndex)}
+                aria-label={`عرض الوسائط ${assetIndex + 1}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MediaPage({ user }: { user: SessionUser | null }) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -167,14 +251,14 @@ function MediaPage() {
   }, []);
 
   return (
-    <PublicLayout>
+    <PublicLayout user={user}>
       <section className="page-hero"><span>الإعلام والأنشطة</span><h1>آخر أخبار المركز وأنشطته</h1><p>الإعلانات والفعاليات والأنشطة المنشورة للزوار.</p></section>
       <section className="content-container media-grid">
         {loading && <EmptyState title="جارٍ تحميل المحتوى" />}
         {!loading && activities.length === 0 && <EmptyState title="لا توجد منشورات حاليًا" />}
         {activities.map((item) => (
           <article className="media-card" key={item.id}>
-            {item.imageUrl ? <img className="media-image" src={item.imageUrl} alt="" /> : <div className="media-placeholder"><Icon name="media" size={42} /></div>}
+            <MediaSlideshow item={item} />
             <small>{item.category}</small>
             <h3>{item.title}</h3>
             <p>{item.content}</p>
@@ -213,7 +297,7 @@ function LoginPage({ user, onLogin }: { user: SessionUser | null; onLogin: (user
   }
 
   return (
-    <PublicLayout>
+    <PublicLayout user={user}>
       <section className="login-section">
         <form className="login-card" onSubmit={submit}>
           <div className="login-symbol">ق</div>
@@ -264,7 +348,7 @@ function DashboardShell<T extends string>({
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
-        <div className="brand admin-brand"><div className="brand-mark">ق</div><div><strong>مركز التحفيظ</strong><span>{title}</span></div></div>
+        <Link className="brand admin-brand" to="/" title="الذهاب إلى الموقع العام"><BrandLogo /><div><strong>مركز التحفيظ</strong><span>{title}</span></div></Link>
         <nav>
           {nav.map((item) => (
             <button key={item.id} className={active === item.id ? 'active' : ''} onClick={() => onChange(item.id)}>
@@ -413,7 +497,7 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
 
 function UsersManager({ users, halaqahs, isAdmin, onChanged, onError }: { users: ManagedUser[]; halaqahs: Halaqah[]; isAdmin: boolean; onChanged: (m: string) => void; onError: (m: string) => void }) {
   const [showPassword, setShowPassword] = useState(false);
-  const [form, setForm] = useState({ loginId: '', fullName: '', password: '', role: 'STUDENT' as CreatableRole, halaqahId: '', building: '', room: '' });
+  const [form, setForm] = useState({ loginNumber: '', fullName: '', password: '', role: 'STUDENT' as CreatableRole, halaqahId: '', building: '', room: '' });
   const [modal, setModal] = useState<{ type: 'credential' | 'reset' | 'edit' | 'delete'; user: ManagedUser } | null>(null);
   const [credential, setCredential] = useState<{ loginId: string; password: string } | null>(null);
   const [modalPassword, setModalPassword] = useState('');
@@ -430,7 +514,7 @@ function UsersManager({ users, halaqahs, isAdmin, onChanged, onError }: { users:
         building: isStudent ? form.building : undefined,
         room: isStudent ? form.room : undefined,
       });
-      setForm({ loginId: '', fullName: '', password: '', role: 'STUDENT', halaqahId: '', building: '', room: '' });
+      setForm({ loginNumber: '', fullName: '', password: '', role: 'STUDENT', halaqahId: '', building: '', room: '' });
       setShowPassword(false);
       onChanged(result.message);
     } catch (err) { onError(err instanceof Error ? err.message : 'تعذر إنشاء الحساب'); }
@@ -497,7 +581,19 @@ function UsersManager({ users, halaqahs, isAdmin, onChanged, onError }: { users:
         <form className="user-form" onSubmit={createUser}>
           <label>نوع الحساب<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as CreatableRole })}>{isAdmin && <option value="MANAGER">مشرف</option>}<option value="TEACHER">معلم</option><option value="STUDENT">طالب</option><option value="PARENT">ولي أمر</option></select></label>
           <label>الاسم الكامل<input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required /></label>
-          <label>معرف المستخدم<input dir="ltr" value={form.loginId} onChange={(e) => setForm({ ...form, loginId: e.target.value })} required /></label>
+          <label>رقم الحساب
+            <div className="login-id-field" dir="ltr">
+              <span>{accountPrefix(form.role)}</span>
+              <input
+                value={form.loginNumber}
+                onChange={(e) => setForm({ ...form, loginNumber: e.target.value.replace(/\D/g, '') })}
+                inputMode="numeric"
+                pattern="[0-9]+"
+                placeholder="69260001"
+                required
+              />
+            </div>
+          </label>
           <label>كلمة المرور<div className="password-field"><input dir="ltr" type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} minLength={8} autoComplete="new-password" required /><button type="button" className="icon-button password-toggle" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div></label>
           {isStudent && <><label>الحلقة<select value={form.halaqahId} onChange={(e) => setForm({ ...form, halaqahId: e.target.value })} required><option value="">اختر الحلقة</option>{halaqahs.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>المبنى<input value={form.building} onChange={(e) => setForm({ ...form, building: e.target.value })} required /></label><label>الغرفة<input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} required /></label></>}
           <div className="form-actions"><button className="primary-button"><Icon name="plus" size={18} />حفظ الحساب</button></div>
@@ -506,7 +602,7 @@ function UsersManager({ users, halaqahs, isAdmin, onChanged, onError }: { users:
 
       <section className="admin-panel">
         <div className="panel-heading"><div><span>قاعدة البيانات</span><h2>الحسابات المسجلة</h2></div><p>{users.length} حساب</p></div>
-        <div className="table-wrap"><table><thead><tr><th>الاسم</th><th>المعرف</th><th>الدور</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>{users.map((entry) => <tr key={entry.id}><td>{entry.fullName}</td><td dir="ltr">{entry.loginId}</td><td>{roleLabels[entry.role]}</td><td><span className={`status-chip ${entry.isActive ? '' : 'status-off'}`}>{entry.isActive ? 'نشط' : 'موقوف'}</span></td><td>{canManage(entry) ? <div className="table-actions"><button className="table-action" onClick={() => void openCredential(entry)} disabled={!entry.passwordAvailable} title="عرض بيانات الدخول"><Icon name="key" /></button><button className="table-action" onClick={() => { setModalPassword(''); setModal({ type: 'reset', user: entry }); }} title="إعادة تعيين كلمة المرور"><Icon name="eye" /></button><button className="table-action" onClick={() => openEdit(entry)} title="تعديل الحساب"><Icon name="edit" /></button><button className="table-action danger" onClick={() => setModal({ type: 'delete', user: entry })} title="حذف الحساب"><Icon name="trash" /></button></div> : <span className="protected-label">محمي</span>}</td></tr>)}</tbody></table></div>
+        <div className="table-wrap"><table><thead><tr><th>الاسم</th><th>المعرف</th><th>الدور</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>{users.map((entry) => <tr key={entry.id}><td>{entry.fullName}</td><td dir="ltr">{entry.loginId}</td><td>{roleLabels[entry.role]}</td><td><span className={`status-chip ${entry.isActive ? '' : 'status-off'}`}>{entry.isActive ? 'نشط' : 'موقوف'}</span></td><td>{canManage(entry) ? <div className="table-actions"><button className="table-action" onClick={() => void openCredential(entry)} disabled={!entry.passwordAvailable} title="عرض بيانات الدخول"><Icon name="eye" /></button><button className="table-action" onClick={() => { setModalPassword(''); setModal({ type: 'reset', user: entry }); }} title="تعديل كلمة المرور"><Icon name="key" /></button><button className="table-action" onClick={() => openEdit(entry)} title="تعديل الحساب"><Icon name="edit" /></button><button className="table-action danger" onClick={() => setModal({ type: 'delete', user: entry })} title="حذف الحساب"><Icon name="trash" /></button></div> : <span className="protected-label">محمي</span>}</td></tr>)}</tbody></table></div>
       </section>
 
       {modal?.type === 'credential' && credential && <Modal title="بيانات الدخول" onClose={() => { setModal(null); setCredential(null); }} footer={<button className="primary-button" onClick={() => void navigator.clipboard.writeText(`${credential.loginId}\n${credential.password}`)}>نسخ البيانات</button>}><div className="credential-box"><div><span>معرف المستخدم</span><strong dir="ltr">{credential.loginId}</strong></div><div><span>كلمة المرور</span><strong dir="ltr">{credential.password}</strong></div></div></Modal>}
@@ -559,19 +655,234 @@ function LibraryManager({ items, onChanged, onError }: { items: LibraryItem[]; o
 
 function MediaManager({ items, onChanged, onError }: { items: Activity[]; onChanged: (m: string) => void; onError: (m: string) => void }) {
   const [editing, setEditing] = useState<Activity | null>(null);
-  const [form, setForm] = useState({ title: '', content: '', category: 'نشاط', imageUrl: '', published: true });
-  function clear() { setEditing(null); setForm({ title: '', content: '', category: 'نشاط', imageUrl: '', published: true }); }
-  function edit(item: Activity) { setEditing(item); setForm({ title: item.title, content: item.content, category: item.category, imageUrl: item.imageUrl || '', published: item.published }); }
-  async function submit(event: FormEvent) { event.preventDefault(); const payload = { ...form, imageUrl: form.imageUrl || null }; try { const result = editing ? await api.updateActivity(editing.id, payload) : await api.createActivity(payload); clear(); onChanged(result.message); } catch (err) { onError(err instanceof Error ? err.message : 'تعذر حفظ المحتوى'); } }
-  async function remove(item: Activity) { try { const result = await api.deleteActivity(item.id); onChanged(result.message); } catch (err) { onError(err instanceof Error ? err.message : 'تعذر حذف المحتوى'); } }
-  return <><section className="admin-panel"><div className="panel-heading"><div><span>الإعلام والأنشطة</span><h2>{editing ? 'تعديل منشور' : 'إضافة منشور'}</h2></div>{editing && <button className="text-button" onClick={clear}>إلغاء التعديل</button>}</div><form className="user-form" onSubmit={submit}><label>العنوان<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label><label>التصنيف<input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required /></label><label className="span-2">رابط الصورة - اختياري<input dir="ltr" type="url" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} /></label><label className="span-2">المحتوى<textarea rows={5} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} required /></label><label className="check-field span-2"><input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} />منشور للزوار</label><div className="form-actions"><button className="primary-button">{editing ? 'حفظ التعديلات' : 'نشر المحتوى'}</button></div></form></section><section className="admin-panel"><div className="panel-heading"><div><span>المنشورات</span><h2>المحتوى الإعلامي</h2></div></div><div className="item-list">{items.map((item) => <div className="item-row" key={item.id}><div className="card-icon"><Icon name="media" /></div><div className="item-main"><strong>{item.title}</strong><span>{item.category} • {item.published ? 'منشور' : 'مخفي'} • {formatDate(item.createdAt)}</span></div><div className="table-actions"><button className="table-action" onClick={() => edit(item)}><Icon name="edit" /></button><button className="table-action danger" onClick={() => void remove(item)}><Icon name="trash" /></button></div></div>)}</div>{items.length === 0 && <EmptyState title="لا توجد منشورات" />}</section></>;
+  const [form, setForm] = useState({ title: '', content: '', category: 'نشاط', published: true });
+  const [files, setFiles] = useState<File[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  function clear() {
+    setEditing(null);
+    setForm({ title: '', content: '', category: 'نشاط', published: true });
+    setFiles([]);
+    setDragging(false);
+  }
+
+  function edit(item: Activity) {
+    setEditing(item);
+    setForm({ title: item.title, content: item.content, category: item.category, published: item.published });
+    setFiles([]);
+  }
+
+  function addFiles(fileList: FileList | File[]) {
+    const accepted = Array.from(fileList).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
+    if (accepted.length !== Array.from(fileList).length) onError('يسمح فقط بملفات الصور والفيديو.');
+    setFiles((current) => [...current, ...accepted].slice(0, 12));
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const result = editing
+        ? await api.updateActivity(editing.id, form)
+        : await api.createActivity(form);
+
+      for (const file of files) {
+        await api.uploadActivityAsset(result.activity.id, file);
+      }
+
+      clear();
+      onChanged(files.length ? 'تم حفظ المنشور ورفع الوسائط بنجاح' : result.message);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'تعذر حفظ المحتوى');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(item: Activity) {
+    try {
+      const result = await api.deleteActivity(item.id);
+      onChanged(result.message);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'تعذر حذف المحتوى');
+    }
+  }
+
+  async function removeAsset(item: Activity, assetId: string) {
+    try {
+      const result = await api.deleteActivityAsset(item.id, assetId);
+      onChanged(result.message);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'تعذر حذف الملف');
+    }
+  }
+
+  return (
+    <>
+      <section className="admin-panel">
+        <div className="panel-heading">
+          <div><span>الإعلام والأنشطة</span><h2>{editing ? 'تعديل منشور' : 'إضافة منشور'}</h2></div>
+          {editing && <button type="button" className="text-button" onClick={clear}>إلغاء التعديل</button>}
+        </div>
+        <form className="user-form" onSubmit={submit}>
+          <label>العنوان<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
+          <label>التصنيف<input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required /></label>
+          <label className="span-2">المحتوى<textarea rows={5} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} required /></label>
+
+          <div className="span-2 media-upload-field">
+            <span className="field-label">الصور والفيديو</span>
+            <label
+              className={`media-dropzone ${dragging ? 'dragging' : ''}`}
+              onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragging(false);
+                addFiles(e.dataTransfer.files);
+              }}
+            >
+              <input
+                className="file-input"
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                onChange={(e) => {
+                  if (e.target.files) addFiles(e.target.files);
+                  e.currentTarget.value = '';
+                }}
+              />
+              <Icon name="media" size={32} />
+              <strong>اسحب الصور أو الفيديو هنا</strong>
+              <span>أو اضغط للاختيار من الهاتف أو الكمبيوتر — حتى 12 ملفًا</span>
+            </label>
+            {files.length > 0 && (
+              <div className="selected-media-list">
+                {files.map((file, index) => (
+                  <div className="selected-media-item" key={`${file.name}-${file.size}-${index}`}>
+                    <span>{file.name}</span>
+                    <small>{(file.size / 1024 / 1024).toFixed(1)} MB</small>
+                    <button type="button" className="table-action danger" onClick={() => setFiles((current) => current.filter((_, i) => i !== index))} aria-label="إزالة الملف">
+                      <Icon name="trash" size={17} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {editing && (editing.assets?.length ?? 0) > 0 && (
+            <div className="span-2">
+              <span className="field-label">الوسائط الحالية</span>
+              <div className="existing-media-grid">
+                {editing.assets!.map((asset) => (
+                  <div className="existing-media-item" key={asset.id}>
+                    {asset.kind === 'VIDEO'
+                      ? <video src={resolveMediaUrl(asset.url)} controls preload="metadata" />
+                      : <img src={resolveMediaUrl(asset.url)} alt="" />}
+                    <button type="button" className="table-action danger" onClick={() => void removeAsset(editing, asset.id)} title="حذف الملف">
+                      <Icon name="trash" size={17} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <label className="check-field span-2"><input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} />منشور للزوار</label>
+          <div className="form-actions"><button className="primary-button" disabled={saving}>{saving ? 'جارٍ الحفظ والرفع...' : editing ? 'حفظ التعديلات' : 'نشر المحتوى'}</button></div>
+        </form>
+      </section>
+
+      <section className="admin-panel">
+        <div className="panel-heading"><div><span>المنشورات</span><h2>المحتوى الإعلامي</h2></div></div>
+        <div className="item-list">
+          {items.map((item) => (
+            <div className="item-row" key={item.id}>
+              <div className="card-icon"><Icon name="media" /></div>
+              <div className="item-main"><strong>{item.title}</strong><span>{item.category} • {item.published ? 'منشور' : 'مخفي'} • {(item.assets?.length ?? 0)} وسائط • {formatDate(item.createdAt)}</span></div>
+              <div className="table-actions">
+                <button className="table-action" onClick={() => edit(item)} title="تعديل المنشور"><Icon name="edit" /></button>
+                <button className="table-action danger" onClick={() => void remove(item)} title="حذف المنشور"><Icon name="trash" /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+        {items.length === 0 && <EmptyState title="لا توجد منشورات" />}
+      </section>
+    </>
+  );
 }
 
 function HomeEditor({ home, onChanged, onError }: { home: HomeContent; onChanged: (m: string) => void; onError: (m: string) => void }) {
   const [form, setForm] = useState<HomeContent>(home);
   useEffect(() => setForm(home), [home]);
-  async function submit(event: FormEvent) { event.preventDefault(); try { const result = await api.updateHome(form); onChanged(result.message); } catch (err) { onError(err instanceof Error ? err.message : 'تعذر تحديث الصفحة الرئيسية'); } }
-  return <section className="admin-panel"><div className="panel-heading"><div><span>الموقع العام</span><h2>تحرير الصفحة الرئيسية</h2></div><p>هذه الصلاحية متاحة للمدير فقط.</p></div><form className="content-editor" onSubmit={submit}><label>الشريط التعريفي<input value={form.eyebrow} onChange={(e) => setForm({ ...form, eyebrow: e.target.value })} /></label><label>العنوان الرئيسي<input value={form.heroTitle} onChange={(e) => setForm({ ...form, heroTitle: e.target.value })} /></label><label>وصف الواجهة<textarea value={form.heroBody} onChange={(e) => setForm({ ...form, heroBody: e.target.value })} /></label><label>عنوان قسم التعريف<input value={form.aboutTitle} onChange={(e) => setForm({ ...form, aboutTitle: e.target.value })} /></label><label>وصف قسم التعريف<textarea value={form.aboutBody} onChange={(e) => setForm({ ...form, aboutBody: e.target.value })} /></label><div className="editor-divider">بطاقات المزايا</div><label>الميزة الأولى<input value={form.feature1Title} onChange={(e) => setForm({ ...form, feature1Title: e.target.value })} /></label><label>وصفها<textarea value={form.feature1Body} onChange={(e) => setForm({ ...form, feature1Body: e.target.value })} /></label><label>الميزة الثانية<input value={form.feature2Title} onChange={(e) => setForm({ ...form, feature2Title: e.target.value })} /></label><label>وصفها<textarea value={form.feature2Body} onChange={(e) => setForm({ ...form, feature2Body: e.target.value })} /></label><label>الميزة الثالثة<input value={form.feature3Title} onChange={(e) => setForm({ ...form, feature3Title: e.target.value })} /></label><label>وصفها<textarea value={form.feature3Body} onChange={(e) => setForm({ ...form, feature3Body: e.target.value })} /></label><div className="editor-divider">البطاقة الرئيسية</div><label>عنوان البطاقة<input value={form.calloutTitle} onChange={(e) => setForm({ ...form, calloutTitle: e.target.value })} /></label><label>وصف البطاقة<textarea value={form.calloutBody} onChange={(e) => setForm({ ...form, calloutBody: e.target.value })} /></label><div className="form-actions"><button className="primary-button">حفظ الصفحة الرئيسية</button></div></form></section>;
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const result = await api.updateHome(form);
+      onChanged(result.message);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'تعذر تحديث الصفحة الرئيسية');
+    }
+  }
+
+  return (
+    <form className="home-editor-stack" onSubmit={submit}>
+      <section className="admin-panel">
+        <div className="panel-heading"><div><span>القسم الأول</span><h2>واجهة الصفحة الرئيسية</h2></div><p>هذا هو القسم الكبير الذي يظهر أولًا للزائر.</p></div>
+        <div className="content-editor">
+          <label>الشريط التعريفي<input value={form.eyebrow} onChange={(e) => setForm({ ...form, eyebrow: e.target.value })} /></label>
+          <label>العنوان الرئيسي<input value={form.heroTitle} onChange={(e) => setForm({ ...form, heroTitle: e.target.value })} /></label>
+          <label className="span-2">وصف الواجهة<textarea value={form.heroBody} onChange={(e) => setForm({ ...form, heroBody: e.target.value })} /></label>
+        </div>
+      </section>
+
+      <section className="admin-panel">
+        <div className="panel-heading"><div><span>القسم الثاني</span><h2>عن النظام</h2></div><p>العنوان والوصف الظاهران فوق بطاقات المزايا.</p></div>
+        <div className="content-editor">
+          <label>عنوان القسم<input value={form.aboutTitle} onChange={(e) => setForm({ ...form, aboutTitle: e.target.value })} /></label>
+          <label className="span-2">وصف القسم<textarea value={form.aboutBody} onChange={(e) => setForm({ ...form, aboutBody: e.target.value })} /></label>
+        </div>
+      </section>
+
+      <section className="admin-panel">
+        <div className="panel-heading"><div><span>القسم الثالث</span><h2>بطاقات المزايا</h2></div><p>كل بطاقة مستقلة لتسهيل تعديل محتواها.</p></div>
+        <div className="home-feature-editor-grid">
+          <div className="home-feature-editor-card">
+            <strong>الميزة 01</strong>
+            <label>العنوان<input value={form.feature1Title} onChange={(e) => setForm({ ...form, feature1Title: e.target.value })} /></label>
+            <label>الوصف<textarea value={form.feature1Body} onChange={(e) => setForm({ ...form, feature1Body: e.target.value })} /></label>
+          </div>
+          <div className="home-feature-editor-card">
+            <strong>الميزة 02</strong>
+            <label>العنوان<input value={form.feature2Title} onChange={(e) => setForm({ ...form, feature2Title: e.target.value })} /></label>
+            <label>الوصف<textarea value={form.feature2Body} onChange={(e) => setForm({ ...form, feature2Body: e.target.value })} /></label>
+          </div>
+          <div className="home-feature-editor-card">
+            <strong>الميزة 03</strong>
+            <label>العنوان<input value={form.feature3Title} onChange={(e) => setForm({ ...form, feature3Title: e.target.value })} /></label>
+            <label>الوصف<textarea value={form.feature3Body} onChange={(e) => setForm({ ...form, feature3Body: e.target.value })} /></label>
+          </div>
+        </div>
+      </section>
+
+      <section className="admin-panel">
+        <div className="panel-heading"><div><span>القسم الأخضر</span><h2>البطاقة الخضراء في الواجهة</h2></div><p>هذه هي البطاقة الكبيرة الموجودة بجانب عنوان الصفحة.</p></div>
+        <div className="content-editor">
+          <label>عنوان البطاقة<input value={form.calloutTitle} onChange={(e) => setForm({ ...form, calloutTitle: e.target.value })} /></label>
+          <label className="span-2">وصف البطاقة<textarea value={form.calloutBody} onChange={(e) => setForm({ ...form, calloutBody: e.target.value })} /></label>
+        </div>
+      </section>
+
+      <div className="home-editor-save">
+        <span>هذه الصلاحية متاحة للمدير فقط.</span>
+        <button className="primary-button" type="submit"><Icon name="check" size={18} />حفظ جميع تعديلات الصفحة الرئيسية</button>
+      </div>
+    </form>
+  );
 }
 
 function ScheduleManager({ periods, canEdit, onChanged, onError }: { periods: Period[]; canEdit: boolean; onChanged: (m: string) => void; onError: (m: string) => void }) {
@@ -668,9 +979,9 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/library" element={<LibraryPage />} />
-      <Route path="/media" element={<MediaPage />} />
+      <Route path="/" element={<HomePage user={user} />} />
+      <Route path="/library" element={<LibraryPage user={user} />} />
+      <Route path="/media" element={<MediaPage user={user} />} />
       <Route path="/login" element={<LoginPage user={user} onLogin={setUser} />} />
       <Route path="/admin" element={<ManagementDashboard user={user} onLogout={logout} mode="ADMIN" />} />
       <Route path="/manager" element={<ManagementDashboard user={user} onLogout={logout} mode="MANAGER" />} />
