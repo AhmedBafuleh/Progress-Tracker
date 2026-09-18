@@ -1,4 +1,7 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
+import { randomUUID } from 'node:crypto';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { Role } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../config/prisma.js';
@@ -58,6 +61,38 @@ const activitySchema = z.object({
 });
 
 const idSchema = z.string().cuid();
+const activityInclude = {
+  author: { select: { id: true, fullName: true } },
+  assets: { orderBy: { sortOrder: 'asc' as const } },
+};
+
+const mediaUploadDirectory = path.join(process.cwd(), 'uploads', 'media');
+
+function extensionForUpload(fileName: string, mimeType: string) {
+  const fromName = path.extname(fileName).toLowerCase();
+  if (/^\.[a-z0-9]{1,8}$/.test(fromName)) return fromName;
+
+  const known: Record<string, string> = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp',
+    'image/gif': '.gif',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+    'video/quicktime': '.mov',
+  };
+  return known[mimeType] ?? '';
+}
+
+async function removeStoredAsset(url: string) {
+  if (!url.startsWith('/uploads/media/')) return;
+  const fileName = path.basename(url);
+  try {
+    await unlink(path.join(mediaUploadDirectory, fileName));
+  } catch {
+    // The database record should still be removable even if the physical file is already gone.
+  }
+}
 
 router.get('/home', async (_req, res, next) => {
   try {
@@ -85,7 +120,7 @@ router.get('/media', async (_req, res, next) => {
     const activities = await prisma.activity.findMany({
       where: { published: true },
       orderBy: { createdAt: 'desc' },
-      include: { author: { select: { id: true, fullName: true } } },
+      include: activityInclude,
     });
     res.json({ activities });
   } catch (error) {
@@ -108,7 +143,7 @@ router.get('/media/manage', requireRole(Role.ADMIN, Role.MANAGER), async (_req, 
   try {
     const activities = await prisma.activity.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { author: { select: { id: true, fullName: true } } },
+      include: activityInclude,
     });
     res.json({ activities });
   } catch (error) {
@@ -170,7 +205,7 @@ router.post('/media', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, ne
     const input = activitySchema.parse(req.body);
     const activity = await prisma.activity.create({
       data: { ...input, authorId: req.authUser!.id },
-      include: { author: { select: { id: true, fullName: true } } },
+      include: activityInclude,
     });
     res.status(201).json({ activity, message: 'تم نشر المحتوى الإعلامي' });
   } catch (error) {
@@ -187,9 +222,80 @@ router.patch('/media/:id', requireRole(Role.ADMIN, Role.MANAGER), async (req, re
     const activity = await prisma.activity.update({
       where: { id },
       data: input,
-      include: { author: { select: { id: true, fullName: true } } },
+      include: activityInclude,
     });
     res.json({ activity, message: 'تم تحديث المحتوى الإعلامي' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post(
+  '/media/:id/assets',
+  requireRole(Role.ADMIN, Role.MANAGER),
+  express.raw({ type: '*/*', limit: '50mb' }),
+  async (req, res, next) => {
+    try {
+      const activityId = idSchema.parse(req.params.id);
+      const activity = await prisma.activity.findUnique({ where: { id: activityId }, select: { id: true } });
+      if (!activity) throw new AppError('المحتوى غير موجود', 404, 'ACTIVITY_NOT_FOUND');
+
+      const body = req.body;
+      if (!Buffer.isBuffer(body) || body.length === 0) {
+        throw new AppError('الملف فارغ أو غير صالح', 400, 'INVALID_MEDIA_FILE');
+      }
+
+      const mimeType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+      const kind = mimeType.startsWith('image/') ? 'IMAGE' : mimeType.startsWith('video/') ? 'VIDEO' : null;
+      if (!kind) {
+        throw new AppError('يسمح فقط بملفات الصور والفيديو', 415, 'UNSUPPORTED_MEDIA_TYPE');
+      }
+
+      const encodedName = String(req.headers['x-file-name'] || 'upload');
+      let originalName = 'upload';
+      try {
+        originalName = decodeURIComponent(encodedName);
+      } catch {
+        originalName = encodedName;
+      }
+
+      const extension = extensionForUpload(originalName, mimeType);
+      const storedName = `${Date.now()}-${randomUUID()}${extension}`;
+
+      await mkdir(mediaUploadDirectory, { recursive: true });
+      await writeFile(path.join(mediaUploadDirectory, storedName), body);
+
+      const sortOrder = await prisma.activityAsset.count({ where: { activityId } });
+      const asset = await prisma.activityAsset.create({
+        data: {
+          activityId,
+          kind,
+          mimeType,
+          fileName: originalName.slice(0, 255),
+          url: `/uploads/media/${storedName}`,
+          sortOrder,
+        },
+      });
+
+      res.status(201).json({ asset, message: 'تم رفع الملف بنجاح' });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.delete('/media/:id/assets/:assetId', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
+  try {
+    const activityId = idSchema.parse(req.params.id);
+    const assetId = idSchema.parse(req.params.assetId);
+    const asset = await prisma.activityAsset.findFirst({
+      where: { id: assetId, activityId },
+    });
+    if (!asset) throw new AppError('الملف غير موجود', 404, 'MEDIA_ASSET_NOT_FOUND');
+
+    await prisma.activityAsset.delete({ where: { id: asset.id } });
+    await removeStoredAsset(asset.url);
+    res.json({ message: 'تم حذف الملف من المنشور' });
   } catch (error) {
     next(error);
   }
@@ -198,9 +304,14 @@ router.patch('/media/:id', requireRole(Role.ADMIN, Role.MANAGER), async (req, re
 router.delete('/media/:id', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
   try {
     const id = idSchema.parse(req.params.id);
-    const exists = await prisma.activity.findUnique({ where: { id } });
+    const exists = await prisma.activity.findUnique({
+      where: { id },
+      include: { assets: true },
+    });
     if (!exists) throw new AppError('المحتوى غير موجود', 404, 'ACTIVITY_NOT_FOUND');
+
     await prisma.activity.delete({ where: { id } });
+    await Promise.all(exists.assets.map((asset) => removeStoredAsset(asset.url)));
     res.json({ message: 'تم حذف المحتوى الإعلامي' });
   } catch (error) {
     next(error);
