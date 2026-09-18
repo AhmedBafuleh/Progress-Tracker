@@ -1,4 +1,5 @@
 :root {
+  --home-callout-bg: #234c35;
   font-family: "Segoe UI", Tahoma, Arial, sans-serif;
   color: #17221b;
   background: #f5f7f5;
@@ -48,7 +49,7 @@ input:focus, select:focus, textarea:focus { border-color: #557662; box-shadow: 0
 .compact-button { min-height: 38px; padding: 0 14px; font-size: 13px; }
 .full { width: 100%; }
 .hero-panel { display: flex; justify-content: center; }
-.quran-card { width: min(380px,100%); min-height: 380px; background: #234c35; color: white; border-radius: 38px; padding: 45px; display: flex; flex-direction: column; justify-content: end; box-shadow: 0 30px 70px rgba(35,76,53,.18); }
+.quran-card { width: min(380px,100%); min-height: 380px; background: var(--home-callout-bg); color: white; border-radius: 38px; padding: 45px; display: flex; flex-direction: column; justify-content: end; box-shadow: 0 30px 70px rgba(35,76,53,.18); }
 .quran-icon { width: 86px; height: 86px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.25); border-radius: 24px; font-size: 42px; margin-bottom: auto; }
 .quran-card strong { font-size: 25px; }
 .quran-card p { color: #d9e5dd; font-size: 15px; line-height: 1.8; }
@@ -232,6 +233,7 @@ tbody tr:hover { background: #fcfdfc; }
 /* Media uploads and multi-asset slideshow management */
 .media-upload-field { display: grid; gap: 9px; }
 .field-label { color: #465149; font-size: 13px; font-weight: 700; }
+.field-help { color: #879189; font-size: 11px; font-weight: 500; line-height: 1.6; }
 .media-dropzone { min-height: 170px; display: grid !important; place-items: center; align-content: center; gap: 8px !important; text-align: center; border: 2px dashed #cbd8cf; border-radius: 14px; background: #f9fbf9; color: #54705e; cursor: pointer; padding: 24px; transition: .2s; }
 .media-dropzone:hover, .media-dropzone.dragging { border-color: #557662; background: #edf5ef; }
 .media-dropzone strong { color: #284c36; font-size: 15px; }
