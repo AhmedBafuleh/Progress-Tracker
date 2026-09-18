@@ -245,7 +245,7 @@ router.post(
         throw new AppError('الملف فارغ أو غير صالح', 400, 'INVALID_MEDIA_FILE');
       }
 
-      const mimeType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+      const mimeType = String(req.headers['content-type'] || '').split(';')[0]?.trim().toLowerCase() ?? '';
       const kind = mimeType.startsWith('image/') ? 'IMAGE' : mimeType.startsWith('video/') ? 'VIDEO' : null;
       if (!kind) {
         throw new AppError('يسمح فقط بملفات الصور والفيديو', 415, 'UNSUPPORTED_MEDIA_TYPE');
