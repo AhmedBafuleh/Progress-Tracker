@@ -110,12 +110,23 @@ export type LibraryItem = {
   updatedAt: string;
 };
 
+export type MediaAsset = {
+  id: string;
+  kind: 'IMAGE' | 'VIDEO' | string;
+  mimeType: string;
+  fileName: string;
+  url: string;
+  sortOrder: number;
+  createdAt: string;
+};
+
 export type Activity = {
   id: string;
   title: string;
   content: string;
   category: string;
   imageUrl?: string | null;
+  assets?: MediaAsset[];
   published: boolean;
   createdAt: string;
   updatedAt: string;
@@ -143,6 +154,12 @@ export function saveToken(token: string) {
 
 export function clearToken() {
   localStorage.removeItem('progress_tracker_token');
+}
+
+export function resolveMediaUrl(url: string) {
+  if (/^https?:\/\//i.test(url)) return url;
+  const origin = new URL(API_URL, window.location.origin).origin;
+  return `${origin}${url.startsWith('/') ? url : `/${url}`}`;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -203,6 +220,24 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
+  uploadActivityAsset: async (activityId: string, file: File) => {
+    const token = getToken();
+    const headers = new Headers();
+    headers.set('Content-Type', file.type || 'application/octet-stream');
+    headers.set('X-File-Name', encodeURIComponent(file.name));
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+
+    const response = await fetch(`${API_URL}/content/media/${activityId}/assets`, {
+      method: 'POST',
+      headers,
+      body: file,
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body?.error?.message ?? 'تعذر رفع الملف');
+    return body as { asset: MediaAsset; message: string };
+  },
+  deleteActivityAsset: (activityId: string, assetId: string) =>
+    request<{ message: string }>(`/content/media/${activityId}/assets/${assetId}`, { method: 'DELETE' }),
   deleteActivity: (id: string) =>
     request<{ message: string }>(`/content/media/${id}`, { method: 'DELETE' }),
 
