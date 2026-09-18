@@ -50,8 +50,15 @@ router.post('/halaqahs', requireRole(Role.ADMIN), async (req, res, next) => {
   }
 });
 
+const loginPrefixByRole: Record<'MANAGER' | 'TEACHER' | 'STUDENT' | 'PARENT', string> = {
+  MANAGER: 'MAN',
+  TEACHER: 'TEA',
+  STUDENT: 'STU',
+  PARENT: 'PAR',
+};
+
 const baseUserSchema = z.object({
-  loginId: z.string().trim().min(3).max(50),
+  loginNumber: z.string().trim().regex(/^\d{1,20}$/, 'رقم الحساب يجب أن يحتوي على أرقام فقط'),
   fullName: z.string().trim().min(3).max(150),
   password: z.string().min(8).max(128),
   role: z.enum(['MANAGER', 'TEACHER', 'STUDENT', 'PARENT']),
@@ -63,6 +70,7 @@ const baseUserSchema = z.object({
 router.post('/users', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
   try {
     const input = baseUserSchema.parse(req.body);
+    const loginId = `${loginPrefixByRole[input.role]}${input.loginNumber}`;
 
     if (req.authUser?.role === Role.MANAGER && input.role === Role.MANAGER) {
       throw new AppError('لا يمكن للمشرف إنشاء حساب مشرف آخر', 403, 'MANAGER_CANNOT_CREATE_MANAGER');
@@ -76,7 +84,7 @@ router.post('/users', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, ne
       );
     }
 
-    const existing = await prisma.user.findUnique({ where: { loginId: input.loginId } });
+    const existing = await prisma.user.findUnique({ where: { loginId } });
     if (existing) throw new AppError('معرف المستخدم مستخدم مسبقًا', 409, 'LOGIN_ID_EXISTS');
 
     if (input.role === 'STUDENT') {
@@ -90,7 +98,7 @@ router.post('/users', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, ne
     const created = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
-          loginId: input.loginId,
+          loginId,
           fullName: input.fullName,
           passwordHash,
           credentialCiphertext,
