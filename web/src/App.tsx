@@ -709,11 +709,96 @@ function ParentLinksManager({ users, links, onChanged, onError }: { users: Manag
 function LibraryManager({ items, onChanged, onError }: { items: LibraryItem[]; onChanged: (m: string) => void; onError: (m: string) => void }) {
   const [editing, setEditing] = useState<LibraryItem | null>(null);
   const [form, setForm] = useState({ title: '', description: '', type: 'PDF', url: '', published: true });
-  function clear() { setEditing(null); setForm({ title: '', description: '', type: 'PDF', url: '', published: true }); }
-  function edit(item: LibraryItem) { setEditing(item); setForm({ title: item.title, description: item.description || '', type: item.type, url: item.url, published: item.published }); }
-  async function submit(event: FormEvent) { event.preventDefault(); try { const result = editing ? await api.updateLibraryItem(editing.id, form) : await api.createLibraryItem(form); clear(); onChanged(result.message); } catch (err) { onError(err instanceof Error ? err.message : 'تعذر حفظ المادة'); } }
-  async function remove(item: LibraryItem) { try { const result = await api.deleteLibraryItem(item.id); onChanged(result.message); } catch (err) { onError(err instanceof Error ? err.message : 'تعذر حذف المادة'); } }
-  return <><section className="admin-panel"><div className="panel-heading"><div><span>المكتبة</span><h2>{editing ? 'تعديل مادة' : 'إضافة مادة جديدة'}</h2></div>{editing && <button className="text-button" onClick={clear}>إلغاء التعديل</button>}</div><form className="user-form" onSubmit={submit}><label>العنوان<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label><label>النوع<input value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} placeholder="PDF" required /></label><label className="span-2">رابط الملف أو المادة<input dir="ltr" type="url" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://example.com/file.pdf" required /><small className="field-help">هذا هو الرابط الذي سيفتحه الزائر عند الضغط على «فتح المادة».</small></label><label className="span-2">الوصف<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label><label className="check-field span-2"><input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} />منشور للزوار</label><div className="form-actions"><button className="primary-button">{editing ? 'حفظ التعديلات' : 'إضافة إلى المكتبة'}</button></div></form></section><section className="admin-panel"><div className="panel-heading"><div><span>المواد</span><h2>محتوى المكتبة</h2></div></div><div className="item-list">{items.map((item) => <div className="item-row" key={item.id}><div className="card-icon"><Icon name="file" /></div><div className="item-main"><strong>{item.title}</strong><span>{item.type} • {item.published ? 'منشور' : 'مخفي'}</span></div><div className="table-actions"><button className="table-action" onClick={() => edit(item)}><Icon name="edit" /></button><button className="table-action danger" onClick={() => void remove(item)}><Icon name="trash" /></button></div></div>)}</div>{items.length === 0 && <EmptyState title="المكتبة فارغة" />}</section></>;
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  function clear() {
+    setEditing(null);
+    setForm({ title: '', description: '', type: 'PDF', url: '', published: true });
+    setDragging(false);
+  }
+
+  function edit(item: LibraryItem) {
+    setEditing(item);
+    setForm({ title: item.title, description: item.description || '', type: item.type, url: item.url, published: item.published });
+  }
+
+  async function uploadFile(file: File) {
+    setUploading(true);
+    try {
+      const result = await api.uploadLibraryFile(file);
+      setForm((current) => ({
+        ...current,
+        title: current.title || result.file.fileName.replace(/\.[^.]+$/, ''),
+        type: result.file.type || current.type,
+        url: result.file.url,
+      }));
+      onChanged('تم رفع الملف. أكمل بيانات المادة ثم اضغط حفظ.');
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'تعذر رفع الملف');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const result = editing ? await api.updateLibraryItem(editing.id, form) : await api.createLibraryItem(form);
+      clear();
+      onChanged(result.message);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'تعذر حفظ المادة');
+    }
+  }
+
+  async function remove(item: LibraryItem) {
+    try {
+      const result = await api.deleteLibraryItem(item.id);
+      onChanged(result.message);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'تعذر حذف المادة');
+    }
+  }
+
+  return <>
+    <section className="admin-panel">
+      <div className="panel-heading"><div><span>المكتبة</span><h2>{editing ? 'تعديل مادة' : 'إضافة مادة جديدة'}</h2></div>{editing && <button type="button" className="text-button" onClick={clear}>إلغاء التعديل</button>}</div>
+      <form className="user-form" onSubmit={submit}>
+        <label>العنوان<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
+        <label>النوع<input value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} placeholder="PDF" required /></label>
+        <div className="span-2 media-upload-field">
+          <span className="field-label">رفع ملف من الهاتف أو الكمبيوتر</span>
+          <label
+            className={`media-dropzone ${dragging ? 'dragging' : ''}`}
+            onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={(e) => { e.preventDefault(); setDragging(false); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              const file = e.dataTransfer.files[0];
+              if (file) void uploadFile(file);
+            }}
+          >
+            <input className="file-input" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadFile(file); e.currentTarget.value = ''; }} />
+            <Icon name="file" size={32} />
+            <strong>{uploading ? 'جارٍ رفع الملف...' : 'اسحب الملف هنا أو اضغط للاختيار'}</strong>
+            <span>PDF وWord وPowerPoint وExcel والنصوص والصور</span>
+          </label>
+        </div>
+        <label className="span-2">رابط الملف أو المادة<input dir="ltr" type="text" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="يُملأ تلقائيًا عند الرفع، أو ضع رابطًا خارجيًا" required /><small className="field-help">يمكنك رفع الملف مباشرة أعلاه أو استخدام رابط خارجي.</small></label>
+        <label className="span-2">الوصف<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
+        <label className="check-field span-2"><input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} />منشور للزوار</label>
+        <div className="form-actions"><button className="primary-button" disabled={uploading}>{editing ? 'حفظ التعديلات' : 'إضافة إلى المكتبة'}</button></div>
+      </form>
+    </section>
+    <section className="admin-panel">
+      <div className="panel-heading"><div><span>المواد</span><h2>محتوى المكتبة</h2></div></div>
+      <div className="item-list">{items.map((item) => <div className="item-row" key={item.id}><div className="card-icon"><Icon name="file" /></div><div className="item-main"><strong>{item.title}</strong><span>{item.type} • {item.published ? 'منشور' : 'مخفي'}</span></div><div className="table-actions"><button className="table-action" onClick={() => edit(item)}><Icon name="edit" /></button><button className="table-action danger" onClick={() => void remove(item)}><Icon name="trash" /></button></div></div>)}</div>
+      {items.length === 0 && <EmptyState title="المكتبة فارغة" />}
+    </section>
+  </>;
 }
 
 function MediaManager({ items, onChanged, onError }: { items: Activity[]; onChanged: (m: string) => void; onError: (m: string) => void }) {
@@ -937,6 +1022,16 @@ function HomeEditor({ home, onChanged, onError }: { home: HomeContent; onChanged
         <div className="content-editor">
           <label>عنوان البطاقة<input value={form.calloutTitle} onChange={(e) => setForm({ ...form, calloutTitle: e.target.value })} /></label>
           <label className="span-2">وصف البطاقة<textarea value={form.calloutBody} onChange={(e) => setForm({ ...form, calloutBody: e.target.value })} /></label>
+        </div>
+      </section>
+
+      <section className="admin-panel">
+        <div className="panel-heading"><div><span>تذييل الموقع</span><h2>بيانات التواصل</h2></div><p>تظهر هذه البيانات في أسفل الصفحات العامة.</p></div>
+        <div className="content-editor">
+          <label>رقم التواصل<input dir="ltr" value={form.footerPhone || ''} onChange={(e) => setForm({ ...form, footerPhone: e.target.value })} placeholder="+966..." /></label>
+          <label>البريد الإلكتروني<input dir="ltr" type="email" value={form.footerEmail || ''} onChange={(e) => setForm({ ...form, footerEmail: e.target.value })} /></label>
+          <label>رابط Instagram<input dir="ltr" value={form.footerInstagram || ''} onChange={(e) => setForm({ ...form, footerInstagram: e.target.value })} placeholder="https://instagram.com/..." /></label>
+          <label>رابط Facebook<input dir="ltr" value={form.footerFacebook || ''} onChange={(e) => setForm({ ...form, footerFacebook: e.target.value })} placeholder="https://facebook.com/..." /></label>
         </div>
       </section>
 
