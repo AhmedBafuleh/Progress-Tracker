@@ -95,6 +95,12 @@ const userUpdateSchema = z.object({
   halaqahId: z.string().cuid().optional(),
   building: z.string().trim().min(1).max(100).optional(),
   room: z.string().trim().min(1).max(100).optional(),
+  email: z.string().trim().email('البريد الإلكتروني غير صالح').max(180).nullable().optional(),
+  mobile: z.string().trim().max(30).nullable().optional(),
+  address: z.string().trim().max(300).nullable().optional(),
+  age: z.coerce.number().int().min(3).max(120).nullable().optional(),
+  joinedAt: z.string().nullable().optional(),
+  memorizedAmount: z.string().trim().max(200).nullable().optional(),
 });
 
 router.patch('/users/:id', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
@@ -120,13 +126,24 @@ router.patch('/users/:id', requireRole(Role.ADMIN, Role.MANAGER), async (req, re
     await prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id },
-        data: { fullName: input.fullName, isActive: input.isActive },
+        data: {
+          fullName: input.fullName,
+          isActive: input.isActive,
+          email: input.email,
+          mobile: input.mobile,
+          address: input.address,
+          age: target.role === Role.STUDENT ? input.age : undefined,
+          joinedAt: input.joinedAt === null ? null : input.joinedAt ? new Date(input.joinedAt) : undefined,
+        },
       });
       if (target.role === Role.STUDENT && target.studentProfile) {
-        if (input.halaqahId) {
+        if (input.halaqahId || input.memorizedAmount !== undefined) {
           await tx.student.update({
             where: { id: target.studentProfile.id },
-            data: { halaqahId: input.halaqahId },
+            data: {
+              halaqahId: input.halaqahId,
+              memorizedAmount: input.memorizedAmount,
+            },
           });
         }
         if (input.building || input.room) {
