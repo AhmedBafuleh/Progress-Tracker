@@ -56,7 +56,10 @@ const librarySchema = z.object({
   title: z.string().trim().min(2).max(180),
   description: z.string().trim().max(700).optional().nullable(),
   type: z.string().trim().min(2).max(30).default('PDF'),
-  url: z.string().trim().url('الرابط غير صالح'),
+  url: z.string().trim().min(1).max(1200).refine(
+    (value) => /^https?:\/\//i.test(value) || value.startsWith('/uploads/library/'),
+    'الرابط غير صالح',
+  ),
   published: z.boolean().default(true),
 });
 
