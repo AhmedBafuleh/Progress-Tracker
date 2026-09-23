@@ -12,14 +12,46 @@ const idSchema = z.string().cuid();
 const progressSchema = z.object({
   studentId: z.string().cuid(),
   periodId: z.string().cuid(),
-  surah: z.string().trim().min(1).max(120),
-  verseFrom: z.coerce.number().int().min(1),
-  verseTo: z.coerce.number().int().min(1),
-  pages: z.coerce.number().min(0).max(100),
-  rating: z.coerce.number().int().min(1).max(5),
+  attended: z.boolean().default(true),
+  recordType: z.enum(['HIFZ', 'NEAR_REVIEW', 'FAR_REVIEW', 'MATN']).optional().nullable(),
+  surah: z.string().trim().min(1).max(120).optional().nullable(),
+  verseFrom: z.coerce.number().int().min(1).optional().nullable(),
+  endSurah: z.string().trim().min(1).max(120).optional().nullable(),
+  verseTo: z.coerce.number().int().min(1).optional().nullable(),
+  matnName: z.string().trim().min(1).max(180).optional().nullable(),
+  matnFrom: z.string().trim().max(180).optional().nullable(),
+  matnTo: z.string().trim().max(180).optional().nullable(),
+  pages: z.coerce.number().min(0).max(100).default(0),
+  rating: z.coerce.number().int().min(1).max(5).optional().nullable(),
   recordDate: z.string().min(8),
   note: z.string().trim().max(1000).optional().nullable(),
 });
+
+function validateProgressInput(input: z.infer<typeof progressSchema>) {
+  if (!input.attended) return;
+  if (!input.recordType) {
+    throw new AppError('يجب اختيار نوع المتابعة', 400, 'RECORD_TYPE_REQUIRED');
+  }
+  if (!input.rating) {
+    throw new AppError('يجب تحديد تقييم المتابعة', 400, 'RATING_REQUIRED');
+  }
+
+  if (input.recordType === 'MATN') {
+    if (!input.matnName) {
+      throw new AppError('يجب إدخال اسم المتن', 400, 'MATN_NAME_REQUIRED');
+    }
+    return;
+  }
+
+  if (!input.surah || !input.verseFrom || !input.verseTo) {
+    throw new AppError('يجب تحديد السورة وبداية ونهاية الآيات', 400, 'QURAN_RANGE_REQUIRED');
+  }
+
+  const endSurah = input.endSurah || input.surah;
+  if (endSurah === input.surah && input.verseTo < input.verseFrom) {
+    throw new AppError('رقم الآية الأخيرة يجب أن يكون أكبر من أو يساوي الآية الأولى', 400, 'INVALID_VERSE_RANGE');
+  }
+}
 
 const includeProgress = {
   student: {
@@ -130,9 +162,7 @@ router.get('/', async (req, res, next) => {
 router.post('/', requireRole(Role.ADMIN, Role.TEACHER), async (req, res, next) => {
   try {
     const input = progressSchema.parse(req.body);
-    if (input.verseTo < input.verseFrom) {
-      throw new AppError('رقم الآية الأخيرة يجب أن يكون أكبر من أو يساوي الآية الأولى', 400, 'INVALID_VERSE_RANGE');
-    }
+    validateProgressInput(input);
 
     if (req.authUser!.role === Role.TEACHER) {
       await assertTeacherCanAccessStudent(req.authUser!.id, input.studentId);
@@ -150,11 +180,17 @@ router.post('/', requireRole(Role.ADMIN, Role.TEACHER), async (req, res, next) =
         studentId: input.studentId,
         teacherId: req.authUser!.id,
         periodId: input.periodId,
-        surah: input.surah,
-        verseFrom: input.verseFrom,
-        verseTo: input.verseTo,
-        pages: input.pages,
-        rating: input.rating,
+        attended: input.attended,
+        recordType: input.attended ? input.recordType : null,
+        surah: input.attended && input.recordType !== 'MATN' ? input.surah : null,
+        verseFrom: input.attended && input.recordType !== 'MATN' ? input.verseFrom : null,
+        endSurah: input.attended && input.recordType !== 'MATN' ? (input.endSurah || input.surah) : null,
+        verseTo: input.attended && input.recordType !== 'MATN' ? input.verseTo : null,
+        matnName: input.attended && input.recordType === 'MATN' ? input.matnName : null,
+        matnFrom: input.attended && input.recordType === 'MATN' ? input.matnFrom || null : null,
+        matnTo: input.attended && input.recordType === 'MATN' ? input.matnTo || null : null,
+        pages: input.attended ? input.pages : 0,
+        rating: input.attended ? input.rating : null,
         recordDate: new Date(`${input.recordDate}T00:00:00.000Z`),
         note: input.note || null,
       },
@@ -181,8 +217,16 @@ router.patch('/:id', requireRole(Role.ADMIN, Role.TEACHER), async (req, res, nex
     if (input.studentId && req.authUser!.role === Role.TEACHER) {
       await assertTeacherCanAccessStudent(req.authUser!.id, input.studentId);
     }
-    if (input.verseFrom && input.verseTo && input.verseTo < input.verseFrom) {
-      throw new AppError('نطاق الآيات غير صالح', 400, 'INVALID_VERSE_RANGE');
+    const merged = {
+      ...input,
+      studentId: input.studentId ?? existing.studentId,
+      periodId: input.periodId ?? '',
+      attended: input.attended ?? true,
+      recordDate: input.recordDate ?? new Date().toISOString().slice(0, 10),
+      pages: input.pages ?? 0,
+    };
+    if (input.attended !== undefined || input.recordType || input.surah || input.verseFrom || input.verseTo || input.matnName) {
+      validateProgressInput(merged as z.infer<typeof progressSchema>);
     }
 
     const entry = await prisma.progressEntry.update({
@@ -190,9 +234,15 @@ router.patch('/:id', requireRole(Role.ADMIN, Role.TEACHER), async (req, res, nex
       data: {
         studentId: input.studentId,
         periodId: input.periodId,
+        attended: input.attended,
+        recordType: input.recordType,
         surah: input.surah,
         verseFrom: input.verseFrom,
+        endSurah: input.endSurah,
         verseTo: input.verseTo,
+        matnName: input.matnName,
+        matnFrom: input.matnFrom,
+        matnTo: input.matnTo,
         pages: input.pages,
         rating: input.rating,
         recordDate: input.recordDate ? new Date(`${input.recordDate}T00:00:00.000Z`) : undefined,
