@@ -26,6 +26,10 @@ const defaultHome = {
   feature3Body: 'بوابات مخصصة للمدير والمشرف والمعلم والطالب وولي الأمر.',
   calloutTitle: 'رحلة حفظ أوضح للجميع',
   calloutBody: 'بيانات موحدة وتقارير مختصرة تساعد المركز على متابعة الطالب واتخاذ القرار بسرعة.',
+  footerPhone: '',
+  footerEmail: '',
+  footerInstagram: '',
+  footerFacebook: '',
 };
 
 const homeSchema = z.object({
@@ -42,6 +46,10 @@ const homeSchema = z.object({
   feature3Body: z.string().trim().min(5).max(500),
   calloutTitle: z.string().trim().min(2).max(180),
   calloutBody: z.string().trim().min(5).max(700),
+  footerPhone: z.string().trim().max(60).optional().nullable(),
+  footerEmail: z.string().trim().max(180).optional().nullable(),
+  footerInstagram: z.string().trim().max(300).optional().nullable(),
+  footerFacebook: z.string().trim().max(300).optional().nullable(),
 });
 
 const librarySchema = z.object({
@@ -67,6 +75,7 @@ const activityInclude = {
 };
 
 const mediaUploadDirectory = path.join(process.cwd(), 'uploads', 'media');
+const libraryUploadDirectory = path.join(process.cwd(), 'uploads', 'library');
 
 function extensionForUpload(fileName: string, mimeType: string) {
   const fromName = path.extname(fileName).toLowerCase();
@@ -164,6 +173,62 @@ router.put('/home', requireRole(Role.ADMIN), async (req, res, next) => {
     next(error);
   }
 });
+
+router.post(
+  '/library/upload',
+  requireRole(Role.ADMIN, Role.MANAGER),
+  express.raw({ type: '*/*', limit: '50mb' }),
+  async (req, res, next) => {
+    try {
+      const body = req.body;
+      if (!Buffer.isBuffer(body) || body.length === 0) {
+        throw new AppError('الملف فارغ أو غير صالح', 400, 'INVALID_LIBRARY_FILE');
+      }
+
+      const mimeType = String(req.headers['content-type'] || '').split(';')[0]?.trim().toLowerCase() ?? '';
+      const allowed =
+        mimeType === 'application/pdf' ||
+        mimeType === 'text/plain' ||
+        mimeType === 'application/msword' ||
+        mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        mimeType === 'application/vnd.ms-powerpoint' ||
+        mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+        mimeType === 'application/vnd.ms-excel' ||
+        mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        mimeType.startsWith('image/');
+
+      if (!allowed) {
+        throw new AppError('نوع الملف غير مدعوم في المكتبة', 415, 'UNSUPPORTED_LIBRARY_FILE');
+      }
+
+      const encodedName = String(req.headers['x-file-name'] || 'file');
+      let originalName = 'file';
+      try {
+        originalName = decodeURIComponent(encodedName);
+      } catch {
+        originalName = encodedName;
+      }
+
+      const extension = extensionForUpload(originalName, mimeType);
+      const storedName = `${Date.now()}-${randomUUID()}${extension}`;
+      await mkdir(libraryUploadDirectory, { recursive: true });
+      await writeFile(path.join(libraryUploadDirectory, storedName), body);
+
+      const type = extension ? extension.slice(1).toUpperCase() : 'FILE';
+      res.status(201).json({
+        file: {
+          url: `/uploads/library/${storedName}`,
+          fileName: originalName.slice(0, 255),
+          mimeType,
+          type,
+        },
+        message: 'تم رفع ملف المكتبة بنجاح',
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 router.post('/library', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
   try {
