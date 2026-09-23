@@ -65,6 +65,12 @@ const baseUserSchema = z.object({
   halaqahId: z.string().cuid().optional(),
   building: z.string().trim().min(1).max(100).optional(),
   room: z.string().trim().min(1).max(100).optional(),
+  email: z.string().trim().email('البريد الإلكتروني غير صالح').max(180).optional(),
+  mobile: z.string().trim().min(5).max(30).optional(),
+  address: z.string().trim().min(2).max(300).optional(),
+  age: z.coerce.number().int().min(3).max(120).optional(),
+  joinedAt: z.string().min(8).optional(),
+  memorizedAmount: z.string().trim().min(1).max(200).optional(),
 });
 
 router.post('/users', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
@@ -76,11 +82,29 @@ router.post('/users', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, ne
       throw new AppError('لا يمكن للمشرف إنشاء حساب مشرف آخر', 403, 'MANAGER_CANNOT_CREATE_MANAGER');
     }
 
-    if (input.role === 'STUDENT' && (!input.halaqahId || !input.building || !input.room)) {
+    if (input.role === 'STUDENT') {
+      if (!input.halaqahId || !input.building || !input.room) {
+        throw new AppError(
+          'يجب تحديد الحلقة والمبنى والغرفة عند إضافة طالب',
+          400,
+          'STUDENT_ASSIGNMENT_REQUIRED',
+        );
+      }
+      if (!input.email || !input.mobile || !input.address || !input.age || !input.joinedAt || !input.memorizedAmount) {
+        throw new AppError(
+          'يجب إدخال الجوال والعمر ومقدار الحفظ وتاريخ الانضمام والبريد الإلكتروني والعنوان للطالب',
+          400,
+          'STUDENT_PROFILE_REQUIRED',
+        );
+      }
+    }
+
+    if ((input.role === 'TEACHER' || input.role === 'MANAGER') &&
+      (!input.email || !input.mobile || !input.address || !input.joinedAt)) {
       throw new AppError(
-        'يجب تحديد الحلقة والمبنى والغرفة عند إضافة طالب',
+        'يجب إدخال تاريخ الانضمام والعنوان والبريد الإلكتروني ورقم الجوال',
         400,
-        'STUDENT_ASSIGNMENT_REQUIRED',
+        'STAFF_PROFILE_REQUIRED',
       );
     }
 
@@ -103,8 +127,13 @@ router.post('/users', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, ne
           passwordHash,
           credentialCiphertext,
           role: input.role as Role,
+          email: input.email,
+          mobile: input.mobile,
+          address: input.address,
+          age: input.role === 'STUDENT' ? input.age : undefined,
+          joinedAt: input.joinedAt ? new Date(input.joinedAt) : undefined,
         },
-        select: { id: true, loginId: true, fullName: true, role: true, isActive: true, createdAt: true },
+        select: { id: true, loginId: true, fullName: true, role: true, email: true, mobile: true, address: true, age: true, joinedAt: true, isActive: true, createdAt: true },
       });
 
       if (input.role === 'STUDENT') {
@@ -112,6 +141,7 @@ router.post('/users', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, ne
           data: {
             userId: user.id,
             halaqahId: input.halaqahId!,
+            memorizedAmount: input.memorizedAmount,
           },
         });
 
@@ -146,6 +176,11 @@ router.get('/users', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, nex
         loginId: true,
         fullName: true,
         role: true,
+        email: true,
+        mobile: true,
+        address: true,
+        age: true,
+        joinedAt: true,
         isActive: true,
         createdAt: true,
         credentialCiphertext: true,
@@ -153,6 +188,7 @@ router.get('/users', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, nex
           select: {
             halaqah: { select: { id: true, name: true } },
             dormitory: { select: { building: true, room: true } },
+            memorizedAmount: true,
           },
         },
       },
