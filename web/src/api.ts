@@ -20,12 +20,18 @@ export type ManagedUser = {
   loginId: string;
   fullName: string;
   role: Role;
+  email?: string | null;
+  mobile?: string | null;
+  address?: string | null;
+  age?: number | null;
+  joinedAt?: string | null;
   isActive: boolean;
   createdAt: string;
   passwordAvailable: boolean;
   studentProfile?: {
     halaqah?: { id: string; name: string } | null;
     dormitory?: { building: string; room: string } | null;
+    memorizedAmount?: string | null;
   } | null;
 };
 
@@ -65,11 +71,17 @@ export type StudentOption = {
 
 export type ProgressEntry = {
   id: string;
-  surah: string;
-  verseFrom: number;
-  verseTo: number;
+  attended: boolean;
+  recordType?: 'HIFZ' | 'NEAR_REVIEW' | 'FAR_REVIEW' | 'MATN' | null;
+  surah?: string | null;
+  verseFrom?: number | null;
+  endSurah?: string | null;
+  verseTo?: number | null;
+  matnName?: string | null;
+  matnFrom?: string | null;
+  matnTo?: string | null;
   pages: string | number;
-  rating: number;
+  rating?: number | null;
   recordDate: string;
   note?: string | null;
   createdAt: string;
@@ -97,6 +109,10 @@ export type HomeContent = {
   feature3Body: string;
   calloutTitle: string;
   calloutBody: string;
+  footerPhone?: string | null;
+  footerEmail?: string | null;
+  footerInstagram?: string | null;
+  footerFacebook?: string | null;
 };
 
 export type LibraryItem = {
@@ -131,6 +147,77 @@ export type Activity = {
   createdAt: string;
   updatedAt: string;
   author?: { id: string; fullName: string };
+};
+
+export type LeaveRequest = {
+  id: string;
+  type: 'VACATION' | 'DAY_OFF';
+  fromDate: string;
+  toDate?: string | null;
+  reason?: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  reviewNote?: string | null;
+  createdAt: string;
+  requester: { id: string; loginId: string; fullName: string; role: Role };
+  reviewer?: { id: string; fullName: string } | null;
+};
+
+export type NoteViolation = {
+  id: string;
+  kind: 'NOTE' | 'VIOLATION';
+  context: string;
+  content: string;
+  createdAt: string;
+  subject: { id: string; loginId: string; fullName: string; role: Role };
+  author: { id: string; loginId: string; fullName: string; role: Role };
+  halaqah?: { id: string; name: string } | null;
+};
+
+export type MonthlyTestQuestion = {
+  id?: string;
+  questionNumber: number;
+  correct: boolean;
+  surah?: string | null;
+  ayah?: number | null;
+  referenceText?: string | null;
+};
+
+export type MonthlyTest = {
+  id: string;
+  type: 'HIFZ' | 'REVIEW' | 'MATN';
+  matnName?: string | null;
+  score: number;
+  note?: string | null;
+  testDate: string;
+  createdAt: string;
+  student: { id: string; user: { id?: string; loginId: string; fullName: string } };
+  examiner: { id: string; loginId?: string; fullName: string };
+  halaqah: { id: string; name: string };
+  questions: MonthlyTestQuestion[];
+};
+
+export type HalaqahReport = {
+  halaqah: {
+    id: string;
+    name: string;
+    teacher?: { id: string; fullName: string; loginId: string } | null;
+    students: Array<{
+      id: string;
+      memorizedAmount?: string | null;
+      user: { id: string; fullName: string; loginId: string; mobile?: string | null; email?: string | null };
+    }>;
+  };
+  summary: {
+    students: number;
+    progressRecords: number;
+    attended: number;
+    absent: number;
+    averageRating: number;
+    monthlyTests: number;
+    averageTestScore: number;
+  };
+  progress: ProgressEntry[];
+  tests: MonthlyTest[];
 };
 
 export type ParentLink = {
@@ -208,6 +295,17 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
+  uploadLibraryFile: async (file: File) => {
+    const token = getToken();
+    const headers = new Headers();
+    headers.set('Content-Type', file.type || 'application/octet-stream');
+    headers.set('X-File-Name', encodeURIComponent(file.name));
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    const response = await fetch(`${API_URL}/content/library/upload`, { method: 'POST', headers, body: file });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body?.error?.message ?? 'تعذر رفع ملف المكتبة');
+    return body as { file: { url: string; fileName: string; mimeType: string; type: string }; message: string };
+  },
   deleteLibraryItem: (id: string) =>
     request<{ message: string }>(`/content/library/${id}`, { method: 'DELETE' }),
   createActivity: (payload: Record<string, unknown>) =>
@@ -313,4 +411,29 @@ export const api = {
     }),
   deleteProgress: (id: string) =>
     request<{ message: string }>(`/progress/${id}`, { method: 'DELETE' }),
+
+  listLeaveRequests: () => request<{ requests: LeaveRequest[] }>('/operations/leaves'),
+  createLeaveRequest: (payload: Record<string, unknown>) =>
+    request<{ request: LeaveRequest; message: string }>('/operations/leaves', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  reviewLeaveRequest: (id: string, payload: Record<string, unknown>) =>
+    request<{ request: LeaveRequest; message: string }>(`/operations/leaves/${id}/review`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  listNotes: () => request<{ notes: NoteViolation[] }>('/operations/notes'),
+  createNote: (payload: Record<string, unknown>) =>
+    request<{ note: NoteViolation; message: string }>('/operations/notes', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  listMonthlyTests: () => request<{ tests: MonthlyTest[] }>('/operations/monthly-tests'),
+  createMonthlyTest: (payload: Record<string, unknown>) =>
+    request<{ test: MonthlyTest; message: string }>('/operations/monthly-tests', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getHalaqahReport: (id: string) => request<{ report: HalaqahReport }>(`/operations/halaqah-reports/${id}`),
 };
