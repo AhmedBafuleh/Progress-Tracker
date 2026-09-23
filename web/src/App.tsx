@@ -1063,13 +1063,18 @@ function ReportsPanel({ users, halaqahs, entries }: { users: ManagedUser[]; hala
   const totalPages = pagesTotal(entries);
   const avg = averageRating(entries);
   const byStudent = useMemo(() => {
-    const map = new Map<string, { name: string; sessions: number; pages: number; rating: number }>();
+    const map = new Map<string, { name: string; sessions: number; pages: number; rating: number; ratingCount: number }>();
     entries.forEach((entry) => {
-      const current = map.get(entry.student.id) || { name: entry.student.user.fullName, sessions: 0, pages: 0, rating: 0 };
-      current.sessions += 1; current.pages += Number(entry.pages); current.rating += entry.rating;
+      const current = map.get(entry.student.id) || { name: entry.student.user.fullName, sessions: 0, pages: 0, rating: 0, ratingCount: 0 };
+      current.sessions += 1;
+      current.pages += Number(entry.pages);
+      if (typeof entry.rating === 'number') {
+        current.rating += entry.rating;
+        current.ratingCount += 1;
+      }
       map.set(entry.student.id, current);
     });
-    return [...map.values()].map((item) => ({ ...item, average: item.sessions ? item.rating / item.sessions : 0 })).sort((a, b) => b.sessions - a.sessions);
+    return [...map.values()].map((item) => ({ ...item, average: item.ratingCount ? item.rating / item.ratingCount : 0 })).sort((a, b) => b.sessions - a.sessions);
   }, [entries]);
   return <><div className="stat-grid"><StatCard label="الطلاب" value={students.length} /><StatCard label="المعلمون" value={teachers.length} /><StatCard label="إجمالي الصفحات" value={totalPages.toFixed(1)} /><StatCard label="متوسط التقييم" value={`${avg.toFixed(1)} / 5`} /></div><section className="admin-panel"><div className="panel-heading"><div><span>ملخص الأداء</span><h2>تقرير الطلاب</h2></div><p>{halaqahs.length} حلقة</p></div><div className="table-wrap"><table><thead><tr><th>الطالب</th><th>الجلسات</th><th>الصفحات</th><th>متوسط التقييم</th></tr></thead><tbody>{byStudent.map((item) => <tr key={item.name}><td>{item.name}</td><td>{item.sessions}</td><td>{item.pages.toFixed(1)}</td><td>{item.average.toFixed(1)} / 5</td></tr>)}</tbody></table></div>{byStudent.length === 0 && <EmptyState title="لا توجد بيانات متابعة بعد" />}</section></>;
 }
