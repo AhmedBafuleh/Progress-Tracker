@@ -591,3 +591,51 @@ input:focus, select:focus, textarea:focus {
   .student-notification { grid-template-columns: 42px 1fr; }
   .student-notification > i { position: absolute; left: 13px; top: 13px; }
 }
+
+
+/* Refined dashboard navigation — logo-matched plum instead of green */
+.admin-sidebar {
+  background:
+    radial-gradient(circle at 20% 8%, rgba(201,150,75,.10), transparent 24%),
+    linear-gradient(180deg, #2b1427 0%, #35182f 52%, #241020 100%);
+  color: #fff;
+  box-shadow: -14px 0 34px rgba(35,16,32,.10);
+}
+.admin-brand span { color: #d6c9d3; }
+.admin-sidebar nav {
+  scrollbar-color: rgba(220,205,217,.34) transparent;
+}
+.admin-sidebar nav::-webkit-scrollbar { width: 4px; }
+.admin-sidebar nav::-webkit-scrollbar-thumb {
+  background: rgba(220,205,217,.32);
+  border: 0;
+  border-radius: 999px;
+}
+.admin-sidebar nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(201,150,75,.68);
+}
+.admin-sidebar nav button {
+  color: #d8cbd5;
+}
+.admin-sidebar nav button:hover {
+  color: #fff;
+  background: rgba(255,255,255,.055);
+  border-color: rgba(201,150,75,.18);
+}
+.admin-sidebar nav button.active {
+  color: #fff;
+  background: linear-gradient(90deg, rgba(116,16,100,.88), rgba(116,16,100,.50));
+  border-color: rgba(201,150,75,.50);
+  box-shadow: inset 3px 0 0 var(--brand-gold);
+}
+.sidebar-logout {
+  color: #eadfe7;
+  border-color: rgba(201,150,75,.30);
+}
+.sidebar-logout:hover {
+  background: rgba(116,16,100,.22);
+  border-color: rgba(201,150,75,.58);
+}
+
+/* Date fields use a single visible DD-MM-YY convention */
+.inline-example { display: none !important; }
