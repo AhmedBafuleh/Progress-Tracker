@@ -91,7 +91,7 @@ function averageRating(entries: ProgressEntry[]) {
 }
 
 function BrandLogo() {
-  return <img className="brand-logo" src="/logo.svg" alt="شعار مركز التحفيظ" />;
+  return <img className="brand-logo" src="/dar-al-nur-logo.jpg" alt="شعار دار النور لتعليم القرآن الكريم" />;
 }
 
 function PublicLayout({ children, user }: { children: ReactNode; user: SessionUser | null }) {
@@ -319,7 +319,7 @@ function LoginPage({ user, onLogin }: { user: SessionUser | null; onLogin: (user
     <PublicLayout user={user}>
       <section className="login-section">
         <form className="login-card" onSubmit={submit}>
-          <div className="login-symbol">ق</div>
+          <div className="login-symbol"><BrandLogo /></div>
           <h1>تسجيل الدخول</h1>
           <p>أدخل معرف المستخدم وكلمة المرور للوصول إلى لوحة التحكم المخصصة لدورك.</p>
           <label>معرف المستخدم<input value={loginId} onChange={(e) => setLoginId(e.target.value)} placeholder="مثال: ADMIN001" autoComplete="username" required /></label>
