@@ -82,7 +82,7 @@ export function DailyProgressRecorder({ user, onSaved }: { user: SessionUser; on
         </div>}
         <div className="record-row"><label>عدد الصفحات<input type="number" min={0} step="0.25" value={form.pages} onChange={(e) => setForm({ ...form, pages: Number(e.target.value) })} /></label><label>التقييم<select value={form.rating} onChange={(e) => setForm({ ...form, rating: Number(e.target.value) })}>{[5,4,3,2,1].map((r) => <option key={r} value={r}>{r} / 5</option>)}</select></label></div>
       </>}
-      {!form.attended && <div className="record-row"><label>الفترة<select value={form.periodId} onChange={(e) => setForm({ ...form, periodId: e.target.value })}>{periods.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.startTime})</option>)}</select></label><label>التاريخ<input type="date" value={form.recordDate} onChange={(e) => setForm({ ...form, recordDate: e.target.value })} /></label></div>}
+      {!form.attended && <div className="record-row"><label>الفترة<select value={form.periodId} onChange={(e) => setForm({ ...form, periodId: e.target.value })}>{periods.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.startTime})</option>)}</select></label><label>التاريخ<DateField value={form.recordDate} onChange={(value) => setForm({ ...form, recordDate: value })} required /></label></div>}
       <label>ملاحظة<textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label>
       <div className="form-actions"><button className="primary-button" disabled={saving}>{saving ? 'جارٍ الحفظ...' : 'حفظ المتابعة'}</button></div>
     </form>}
