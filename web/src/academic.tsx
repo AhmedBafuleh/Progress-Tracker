@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { api, type Halaqah, type HalaqahReport, type LeaveRequest, type MonthlyTest, type MonthlyTestQuestion, type NoteViolation, type SessionUser, type StudentOption } from './api';
+import { api, type Halaqah, type HalaqahReport, type LeaveRequest, type MonthlyTest, type MonthlyTestQuestion, type NoteViolation, type SessionUser, type StudentNotification, type StudentOption } from './api';
 import { Icon } from './icons';
 
 const recordTypeLabels: Record<string, string> = { HIFZ: 'حفظ', NEAR_REVIEW: 'مراجعة قريب', FAR_REVIEW: 'مراجعة بعيد', MATN: 'متن' };
@@ -97,7 +97,7 @@ export function LeaveRequestsPanel({ user }: { user: SessionUser }) {
   async function review(id: string, status: 'APPROVED' | 'REJECTED') { try { const result = await api.reviewLeaveRequest(id, { status, reviewNote: reviewNote || null }); setNotice(result.message); setReviewNote(''); await refresh(); } catch (err) { setError(messageOf(err, 'تعذر تحديث الطلب')); } }
   return <>
     <section className="admin-panel"><div className="panel-heading"><div><span>الإجازات</span><h2>طلب إجازة أو يوم راحة</h2></div></div>{notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
-      <form className="user-form" onSubmit={submit}><label>نوع الطلب<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="DAY_OFF">يوم راحة</option><option value="VACATION">إجازة</option></select></label><label>من<input type="date" value={form.fromDate} onChange={(e) => setForm({ ...form, fromDate: e.target.value })} /></label><label>إلى<input type="date" value={form.toDate} onChange={(e) => setForm({ ...form, toDate: e.target.value })} /></label><label className="span-2">السبب<textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} /></label><div className="form-actions"><button className="primary-button">إرسال الطلب</button></div></form>
+      <form className="user-form" onSubmit={submit}><label>نوع الطلب<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="DAY_OFF">يوم راحة</option><option value="VACATION">إجازة</option></select></label><div className="date-pair"><label>من<input type="date" value={form.fromDate} onChange={(e) => setForm({ ...form, fromDate: e.target.value })} /></label><label>إلى<input type="date" value={form.toDate} onChange={(e) => setForm({ ...form, toDate: e.target.value })} /></label></div><label className="span-2">السبب<textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} /></label><div className="form-actions"><button className="primary-button">إرسال الطلب</button></div></form>
     </section>
     <section className="admin-panel"><div className="panel-heading"><div><span>{user.role === 'ADMIN' ? 'جميع الطلبات' : 'طلباتي'}</span><h2>سجل الإجازات</h2></div></div>{user.role === 'ADMIN' && <label className="review-note-field">ملاحظة قرار الإدارة<input value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} placeholder="اختياري" /></label>}
       <div className="table-wrap"><table><thead><tr><th>صاحب الطلب</th><th>النوع</th><th>الفترة</th><th>الحالة</th><th>السبب</th>{user.role === 'ADMIN' && <th>القرار</th>}</tr></thead><tbody>{requests.map((r) => <tr key={r.id}><td>{r.requester.fullName}</td><td>{r.type === 'VACATION' ? 'إجازة' : 'يوم راحة'}</td><td>{new Date(r.fromDate).toLocaleDateString('ar-SA')} — {new Date(r.toDate || r.fromDate).toLocaleDateString('ar-SA')}</td><td><span className="status-chip">{r.status === 'PENDING' ? 'قيد المراجعة' : r.status === 'APPROVED' ? 'مقبول' : 'مرفوض'}</span></td><td>{r.reason || '—'}</td>{user.role === 'ADMIN' && <td>{r.status === 'PENDING' ? <div className="table-actions"><button className="table-action" onClick={() => void review(r.id, 'APPROVED')}><Icon name="check" /></button><button className="table-action danger" onClick={() => void review(r.id, 'REJECTED')}>×</button></div> : 'تمت المراجعة'}</td>}</tr>)}</tbody></table></div>
@@ -144,7 +144,7 @@ export function MonthlyTestsPanel({ user }: { user: SessionUser }) {
   async function submit(event: FormEvent) { event.preventDefault(); try { const result = await api.createMonthlyTest({ ...form, questions }); setNotice(result.message); setQuestions([{ questionNumber: 1, correct: true, surah: '', ayah: 1, referenceText: '' }]); setForm((current) => ({ ...current, note: '', matnName: '' })); await refresh(); } catch (err) { setError(messageOf(err, 'تعذر حفظ الاختبار')); } }
   return <>
     <section className="admin-panel"><div className="panel-heading"><div><span>التقييم الشهري</span><h2>اختبار شهري جديد</h2></div><div className="test-score-preview"><strong>{scorePreview}</strong><span>/100</span></div></div>{notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
-      {students.length ? <form onSubmit={submit}><div className="record-row"><label>الحلقة<select value={form.halaqahId} onChange={(e) => chooseHalaqah(e.target.value)}>{halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label><label>الطالب<select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>{filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.user.fullName}</option>)}</select></label><label>نوع الاختبار<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="HIFZ">حفظ</option><option value="REVIEW">مراجعة</option><option value="MATN">متن</option></select></label><label>التاريخ<input type="date" value={form.testDate} onChange={(e) => setForm({ ...form, testDate: e.target.value })} /></label></div>
+      {students.length ? <form onSubmit={submit}><div className="record-row monthly-test-header"><label>الحلقة<select value={form.halaqahId} onChange={(e) => chooseHalaqah(e.target.value)}>{halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label><label>الطالب<select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>{filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.user.fullName}</option>)}</select></label><label>نوع الاختبار<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="HIFZ">حفظ</option><option value="REVIEW">مراجعة</option><option value="MATN">متن</option></select></label><label>التاريخ<input type="date" value={form.testDate} onChange={(e) => setForm({ ...form, testDate: e.target.value })} /></label></div>
         {form.type === 'MATN' && <label className="standalone-field">اسم المتن<input value={form.matnName} onChange={(e) => setForm({ ...form, matnName: e.target.value })} required /></label>}
         <div className="test-questions">{questions.map((q, index) => <div className="test-question" key={index}><div className="question-number">{q.questionNumber}</div>{form.type === 'MATN' ? <label>موضع السؤال<input value={q.referenceText || ''} onChange={(e) => updateQuestion(index, { referenceText: e.target.value })} placeholder="البيت أو الباب أو الموضع" /></label> : <><label>السورة<input value={q.surah || ''} onChange={(e) => updateQuestion(index, { surah: e.target.value })} required /></label><label>الآية<input type="number" min={1} value={q.ayah || 1} onChange={(e) => updateQuestion(index, { ayah: Number(e.target.value) })} /></label></>}<label>الإجابة<select value={q.correct ? 'TRUE' : 'FALSE'} onChange={(e) => updateQuestion(index, { correct: e.target.value === 'TRUE' })}><option value="TRUE">صحيح</option><option value="FALSE">خطأ</option></select></label>{questions.length > 1 && <button type="button" className="table-action danger" onClick={() => removeQuestion(index)}><Icon name="trash" /></button>}</div>)}<button type="button" className="secondary-button compact-button add-question" onClick={addQuestion}><Icon name="plus" size={17} />إضافة سؤال</button></div>
         <label className="standalone-field">ملاحظات عامة<textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label><div className="form-actions"><button className="primary-button">حفظ الاختبار — {scorePreview}/100</button></div>
@@ -158,4 +158,129 @@ export function HalaqahReportPanel({ halaqahs }: { halaqahs: Halaqah[] }) {
   const [halaqahId, setHalaqahId] = useState(halaqahs[0]?.id || ''); const [report, setReport] = useState<HalaqahReport | null>(null); const [error, setError] = useState('');
   useEffect(() => { if (!halaqahId) return; void api.getHalaqahReport(halaqahId).then((r) => { setReport(r.report); setError(''); }).catch((err) => setError(messageOf(err, 'تعذر تحميل تقرير الحلقة'))); }, [halaqahId]);
   return <section className="admin-panel"><div className="panel-heading"><div><span>تقرير الحلقة الكامل</span><h2>الحضور والتقدم والاختبارات</h2></div><select className="filter-select" value={halaqahId} onChange={(e) => setHalaqahId(e.target.value)}>{halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></div>{error && <div className="error-box">{error}</div>}{report && <><div className="stat-grid"><div className="stat-card"><span>الطلاب</span><strong>{report.summary.students}</strong></div><div className="stat-card"><span>الحضور</span><strong>{report.summary.attended}</strong></div><div className="stat-card"><span>الغياب</span><strong>{report.summary.absent}</strong></div><div className="stat-card"><span>متوسط الاختبارات</span><strong>{report.summary.averageTestScore.toFixed(1)}/100</strong></div></div><div className="report-summary-line">المعلم: <strong>{report.halaqah.teacher?.fullName || 'غير معيّن'}</strong> • سجلات المتابعة: {report.summary.progressRecords} • الاختبارات: {report.summary.monthlyTests}</div><div className="table-wrap"><table><thead><tr><th>الطالب</th><th>المعرف</th><th>مقدار الحفظ</th><th>الجوال</th><th>البريد</th></tr></thead><tbody>{report.halaqah.students.map((s) => <tr key={s.id}><td>{s.user.fullName}</td><td dir="ltr">{s.user.loginId}</td><td>{s.memorizedAmount || '—'}</td><td dir="ltr">{s.user.mobile || '—'}</td><td dir="ltr">{s.user.email || '—'}</td></tr>)}</tbody></table></div></>}</section>;
+}
+
+export function NotificationManagerPanel({ user }: { user: SessionUser }) {
+  const [students, setStudents] = useState<StudentOption[]>([]);
+  const [sent, setSent] = useState<StudentNotification[]>([]);
+  const [form, setForm] = useState({ halaqahId: '', recipientUserId: '', type: 'TASK', title: '', message: '', eventAt: '' });
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+
+  async function refresh() {
+    try {
+      const [studentResult, notificationResult] = await Promise.all([api.listProgressStudents(), api.listNotifications()]);
+      setStudents(studentResult.students);
+      setSent(notificationResult.notifications);
+      const first = studentResult.students[0];
+      setForm((current) => ({
+        ...current,
+        halaqahId: current.halaqahId || first?.halaqah.id || '',
+        recipientUserId: current.recipientUserId || first?.user.id || '',
+      }));
+    } catch (err) {
+      setError(messageOf(err, 'تعذر تحميل الإشعارات'));
+    }
+  }
+
+  useEffect(() => { void refresh(); }, []);
+
+  const halaqahs = useMemo(() => {
+    const map = new Map<string, string>();
+    students.forEach((student) => map.set(student.halaqah.id, student.halaqah.name));
+    return [...map.entries()].map(([id, name]) => ({ id, name }));
+  }, [students]);
+  const filteredStudents = students.filter((student) => student.halaqah.id === form.halaqahId);
+
+  function chooseHalaqah(halaqahId: string) {
+    const first = students.find((student) => student.halaqah.id === halaqahId);
+    setForm((current) => ({ ...current, halaqahId, recipientUserId: first?.user.id || '' }));
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const result = await api.createNotification({
+        recipientUserId: form.recipientUserId,
+        title: form.title,
+        message: form.message,
+        type: form.type,
+        eventAt: form.eventAt ? new Date(form.eventAt).toISOString() : null,
+      });
+      setNotice(result.message);
+      setError('');
+      setForm((current) => ({ ...current, title: '', message: '', eventAt: '', type: 'TASK' }));
+      await refresh();
+    } catch (err) {
+      setError(messageOf(err, 'تعذر إرسال الإشعار'));
+    }
+  }
+
+  return <>
+    <section className="admin-panel">
+      <div className="panel-heading"><div><span>إشعارات الطلاب</span><h2>إرسال مهمة أو نشاط</h2></div><p>{user.role === 'ADMIN' ? 'يمكن للمدير إرسال إشعار لأي طالب.' : 'يمكن للمشرف إرسال إشعار للطلاب.'}</p></div>
+      {notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
+      {students.length ? <form className="user-form" onSubmit={submit}>
+        <label>الحلقة<select value={form.halaqahId} onChange={(e) => chooseHalaqah(e.target.value)}>{halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
+        <label>الطالب<select value={form.recipientUserId} onChange={(e) => setForm({ ...form, recipientUserId: e.target.value })}>{filteredStudents.map((s) => <option key={s.id} value={s.user.id}>{s.user.fullName}</option>)}</select></label>
+        <label>النوع<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="TASK">مهمة</option><option value="ACTIVITY">نشاط</option><option value="REMINDER">تذكير</option></select></label>
+        <label>التاريخ والوقت - اختياري<input type="datetime-local" value={form.eventAt} onChange={(e) => setForm({ ...form, eventAt: e.target.value })} /></label>
+        <label className="span-2">العنوان<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
+        <label className="span-2">التفاصيل<textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required /></label>
+        <div className="form-actions"><button className="primary-button"><Icon name="bell" size={18} />إرسال الإشعار</button></div>
+      </form> : <div className="empty-state"><strong>لا يوجد طلاب متاحون</strong></div>}
+    </section>
+    <section className="admin-panel">
+      <div className="panel-heading"><div><span>السجل</span><h2>الإشعارات المرسلة</h2></div></div>
+      <div className="item-list">{sent.map((item) => <div className="item-row" key={item.id}><div className="notification-icon"><Icon name="bell" /></div><div className="item-main"><strong>{item.title}</strong><span>{item.recipient?.fullName || 'طالب'} • {item.message}</span><span>{item.eventAt ? new Date(item.eventAt).toLocaleString('ar-SA') : new Date(item.createdAt).toLocaleString('ar-SA')}</span></div></div>)}</div>
+      {sent.length === 0 && <div className="empty-state"><strong>لم ترسل إشعارات بعد</strong></div>}
+    </section>
+  </>;
+}
+
+export function StudentNotificationsPanel({ onUnreadChange }: { onUnreadChange?: (count: number) => void }) {
+  const [notifications, setNotifications] = useState<StudentNotification[]>([]);
+  const [error, setError] = useState('');
+
+  async function refresh() {
+    try {
+      const result = await api.listNotifications();
+      setNotifications(result.notifications);
+      onUnreadChange?.(result.unreadCount);
+    } catch (err) {
+      setError(messageOf(err, 'تعذر تحميل الإشعارات'));
+    }
+  }
+
+  useEffect(() => { void refresh(); }, []);
+
+  async function markRead(id: string) {
+    try {
+      await api.markNotificationRead(id);
+      await refresh();
+    } catch (err) {
+      setError(messageOf(err, 'تعذر تحديث الإشعار'));
+    }
+  }
+
+  async function markAll() {
+    try {
+      await api.markAllNotificationsRead();
+      await refresh();
+    } catch (err) {
+      setError(messageOf(err, 'تعذر تحديث الإشعارات'));
+    }
+  }
+
+  const unread = notifications.filter((item) => !item.isRead).length;
+  return <section className="admin-panel">
+    <div className="panel-heading"><div><span>مركز الإشعارات</span><h2>المهام والأنشطة</h2></div>{unread > 0 && <button className="secondary-button compact-button" onClick={() => void markAll()}>تعليم الكل كمقروء</button>}</div>
+    {error && <div className="error-box">{error}</div>}
+    <div className="notification-list">{notifications.map((item) => <button key={item.id} className={`student-notification ${item.isRead ? '' : 'unread'}`} onClick={() => !item.isRead && void markRead(item.id)}>
+      <div className="notification-icon"><Icon name="bell" /></div>
+      <div><strong>{item.title}</strong><p>{item.message}</p><span>{item.type === 'TASK' ? 'مهمة' : item.type === 'ACTIVITY' ? 'نشاط' : 'تذكير'}{item.eventAt ? ' • ' + new Date(item.eventAt).toLocaleString('ar-SA') : ''}</span><small>من {item.sender?.fullName || 'الإدارة'} • {new Date(item.createdAt).toLocaleString('ar-SA')}</small></div>
+      {!item.isRead && <i aria-label="غير مقروء" />}
+    </button>)}</div>
+    {notifications.length === 0 && <div className="empty-state"><Icon name="bell" size={30} /><strong>لا توجد إشعارات</strong></div>}
+  </section>;
 }
