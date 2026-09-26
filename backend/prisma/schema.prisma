@@ -41,6 +41,8 @@ model User {
   authoredNotes       NoteViolation[] @relation("NoteAuthor")
   receivedNotes       NoteViolation[] @relation("NoteSubject")
   administeredTests   MonthlyTest[]   @relation("TestExaminer")
+  sentNotifications    Notification[]  @relation("NotificationSender")
+  receivedNotifications Notification[] @relation("NotificationRecipient")
 
   @@map("users")
 }
@@ -300,4 +302,24 @@ model MonthlyTestQuestion {
 
   @@unique([monthlyTestId, questionNumber])
   @@map("monthly_test_questions")
+}
+
+
+model Notification {
+  id          String   @id @default(cuid())
+  recipientId String   @map("recipient_id")
+  senderId    String   @map("sender_id")
+  title       String
+  message     String
+  type        String   @default("TASK")
+  eventAt     DateTime? @map("event_at")
+  isRead      Boolean  @default(false) @map("is_read")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  recipient User @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender    User @relation("NotificationSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, isRead, createdAt])
+  @@index([senderId, createdAt])
+  @@map("notifications")
 }
