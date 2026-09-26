@@ -220,6 +220,20 @@ export type HalaqahReport = {
   tests: MonthlyTest[];
 };
 
+export type StudentNotification = {
+  id: string;
+  recipientId: string;
+  senderId: string;
+  title: string;
+  message: string;
+  type: 'TASK' | 'ACTIVITY' | 'REMINDER' | string;
+  eventAt?: string | null;
+  isRead: boolean;
+  createdAt: string;
+  sender?: { id: string; fullName: string; role: Role };
+  recipient?: { id: string; loginId: string; fullName: string; role: Role };
+};
+
 export type ParentLink = {
   id: string;
   createdAt: string;
@@ -436,4 +450,18 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   getHalaqahReport: (id: string) => request<{ report: HalaqahReport }>(`/operations/halaqah-reports/${id}`),
+
+  listNotifications: () =>
+    request<{ notifications: StudentNotification[]; unreadCount: number }>('/notifications'),
+  createNotification: (payload: Record<string, unknown>) =>
+    request<{ notification: StudentNotification; message: string }>('/notifications', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  markNotificationRead: (id: string) =>
+    request<{ notification: StudentNotification; message: string }>(`/notifications/${id}/read`, {
+      method: 'PATCH',
+    }),
+  markAllNotificationsRead: () =>
+    request<{ message: string }>('/notifications/read-all', { method: 'PATCH' }),
 };
