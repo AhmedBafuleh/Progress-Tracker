@@ -10,6 +10,7 @@ import contentRoutes from './modules/content/content.routes.js';
 import managementRoutes from './modules/management/management.routes.js';
 import progressRoutes from './modules/progress/progress.routes.js';
 import operationsRoutes from './modules/operations/operations.routes.js';
+import notificationRoutes from './modules/notifications/notifications.routes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 export const app = express();
@@ -36,6 +37,7 @@ app.use('/api/content', contentRoutes);
 app.use('/api/management', managementRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/operations', operationsRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
