@@ -54,8 +54,12 @@ export function DateField({
       onChange={(event) => {
         const next = event.target.value.toUpperCase().replace(/[^0-9-]/g, '');
         setDisplay(next);
+        if (!next) {
+          onChange('');
+          return;
+        }
         const parsed = displayToIso(next);
-        onChange(parsed ?? '');
+        if (parsed) onChange(parsed);
       }}
     />
   );
@@ -105,8 +109,12 @@ export function DateTimeField({
       onChange={(event) => {
         const next = event.target.value.toUpperCase().replace(/[^0-9:\-\s]/g, '');
         setDisplay(next);
+        if (!next) {
+          onChange('');
+          return;
+        }
         const parsed = displayToLocalDateTime(next);
-        onChange(parsed ?? '');
+        if (parsed) onChange(parsed);
       }}
     />
   );
