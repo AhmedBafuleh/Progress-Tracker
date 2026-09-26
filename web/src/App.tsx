@@ -19,7 +19,7 @@ import {
   type Teacher,
 } from './api';
 import { Icon, type IconName } from './icons';
-import { DailyProgressRecorder, HalaqahReportPanel, LeaveRequestsPanel, MonthlyTestsPanel, NotesPanel } from './academic';
+import { DailyProgressRecorder, HalaqahReportPanel, LeaveRequestsPanel, MonthlyTestsPanel, NotesPanel, NotificationManagerPanel, StudentNotificationsPanel } from './academic';
 
 const roleLabels: Record<Role, string> = {
   ADMIN: 'المدير',
@@ -62,7 +62,7 @@ function accountPrefix(role: CreatableRole) {
   return accountPrefixes[role];
 }
 
-type ManagementTab = 'overview' | 'users' | 'halaqahs' | 'parents' | 'record' | 'tests' | 'notes' | 'leaves' | 'library' | 'media' | 'home' | 'schedule' | 'reports';
+type ManagementTab = 'overview' | 'users' | 'halaqahs' | 'parents' | 'record' | 'tests' | 'notes' | 'leaves' | 'notifications' | 'library' | 'media' | 'home' | 'schedule' | 'reports';
 
 type NavItem<T extends string> = { id: T; label: string; icon: IconName };
 
@@ -355,6 +355,7 @@ function DashboardShell<T extends string>({
   onChange,
   onLogout,
   children,
+  headerAction,
 }: {
   user: SessionUser;
   title: string;
@@ -363,6 +364,7 @@ function DashboardShell<T extends string>({
   onChange: (tab: T) => void;
   onLogout: () => void;
   children: ReactNode;
+  headerAction?: ReactNode;
 }) {
   return (
     <div className="admin-shell">
@@ -380,7 +382,7 @@ function DashboardShell<T extends string>({
       <main className="admin-main">
         <div className="admin-header">
           <div><span>{roleLabels[user.role]}</span><h1>{user.fullName}</h1><small dir="ltr">{user.loginId}</small></div>
-          <div className="admin-avatar">{user.fullName.trim().charAt(0) || 'ق'}</div>
+          <div className="admin-header-actions">{headerAction}<div className="admin-avatar">{user.fullName.trim().charAt(0) || 'ق'}</div></div>
         </div>
         {children}
       </main>
@@ -437,6 +439,7 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
       { id: 'parents', label: 'ربط أولياء الأمور', icon: 'link' },
       { id: 'notes', label: isAdmin ? 'ملاحظات الموظفين' : 'ملاحظات الطلاب', icon: 'file' },
       { id: 'leaves', label: 'الإجازات', icon: 'clock' },
+      { id: 'notifications', label: 'إشعارات الطلاب', icon: 'bell' },
       { id: 'library', label: 'المكتبة', icon: 'book' },
       { id: 'media', label: 'الإعلام والأنشطة', icon: 'media' },
     );
@@ -517,6 +520,7 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
       {!loading && active === 'tests' && isAdmin && <MonthlyTestsPanel user={user} />}
       {!loading && active === 'notes' && <NotesPanel user={user} />}
       {!loading && active === 'leaves' && <LeaveRequestsPanel user={user} />}
+      {!loading && active === 'notifications' && <NotificationManagerPanel user={user} />}
       {!loading && active === 'library' && <LibraryManager items={library} onChanged={flash} onError={fail} />}
       {!loading && active === 'media' && <MediaManager items={media} onChanged={flash} onError={fail} />}
       {!loading && active === 'home' && isAdmin && <HomeEditor home={home} onChanged={flash} onError={fail} />}
@@ -655,7 +659,7 @@ function UsersManager({ users, halaqahs, isAdmin, onChanged, onError }: { users:
             </div>
           </label>
           <label>كلمة المرور<div className="password-field"><input dir="ltr" type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} minLength={8} autoComplete="new-password" required /><button type="button" className="icon-button password-toggle" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div></label>
-          {(isStudent || isStaff) && <><label>رقم الجوال<input dir="ltr" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} required /></label><label>البريد الإلكتروني<input dir="ltr" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></label><label className="span-2">العنوان<input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required /></label><label>تاريخ الانضمام<input type="date" value={form.joinedAt} onChange={(e) => setForm({ ...form, joinedAt: e.target.value })} required /></label></>}
+          {(isStudent || isStaff) && <><label>رقم الجوال<input dir="ltr" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} required /></label><label>البريد الإلكتروني<input dir="ltr" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></label><label className="span-2">العنوان<input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required /></label><label>تاريخ الانضمام <small className="inline-example">DD-MM-YY</small><input type="date" value={form.joinedAt} onChange={(e) => setForm({ ...form, joinedAt: e.target.value })} required /></label></>}
           {form.role === 'PARENT' && <><label>رقم الجوال - اختياري<input dir="ltr" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} /></label><label>البريد الإلكتروني - اختياري<input dir="ltr" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label className="span-2">العنوان - اختياري<input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></label></>}
           {isStudent && <><label>العمر<input type="number" min={3} max={120} value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} required /></label><label>مقدار ما تم حفظه من القرآن<input value={form.memorizedAmount} onChange={(e) => setForm({ ...form, memorizedAmount: e.target.value })} placeholder="مثال: 5 أجزاء أو من الناس إلى يس" required /></label></>}
           {isStudent && <><label>الحلقة<select value={form.halaqahId} onChange={(e) => setForm({ ...form, halaqahId: e.target.value })} required><option value="">اختر الحلقة</option>{halaqahs.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>المبنى<input value={form.building} onChange={(e) => setForm({ ...form, building: e.target.value })} required /></label><label>الغرفة<input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} required /></label></>}
@@ -1139,25 +1143,41 @@ function ProgressTable({ entries, compact = false, onDelete }: { entries: Progre
 }
 
 function StudentDashboard({ user, onLogout }: { user: SessionUser | null; onLogout: () => void }) {
-  type Tab = 'overview' | 'history' | 'leaves';
+  type Tab = 'overview' | 'history' | 'leaves' | 'notifications';
   const [active, setActive] = useState<Tab>('overview');
   const [entries, setEntries] = useState<ProgressEntry[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const nav: NavItem<Tab>[] = [
     { id: 'overview', label: 'ملخص تقدمي', icon: 'chart' },
     { id: 'history', label: 'سجل الحفظ', icon: 'history' },
+    { id: 'notifications', label: 'الإشعارات', icon: 'bell' },
     { id: 'leaves', label: 'الإجازات', icon: 'clock' },
   ];
-  useEffect(() => { void api.listProgress().then((r) => setEntries(r.entries)).catch((err) => setError(err instanceof Error ? err.message : 'تعذر تحميل التقدم')).finally(() => setLoading(false)); }, []);
+
+  useEffect(() => {
+    void Promise.all([api.listProgress(), api.listNotifications()])
+      .then(([progressResult, notificationResult]) => {
+        setEntries(progressResult.entries);
+        setUnreadCount(notificationResult.unreadCount);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'تعذر تحميل بياناتك'))
+      .finally(() => setLoading(false));
+  }, []);
+
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'STUDENT') return <Navigate to={routeForRole(user.role)} replace />;
   const latest = entries.find((entry) => entry.attended);
-  return <DashboardShell user={user} title="لوحة الطالب" nav={nav} active={active} onChange={setActive} onLogout={onLogout}>
+
+  const bell = <button className="header-notification-button" onClick={() => setActive('notifications')} title="الإشعارات" aria-label="الإشعارات"><Icon name="bell" size={20} />{unreadCount > 0 && <span>{unreadCount > 99 ? '99+' : unreadCount}</span>}</button>;
+
+  return <DashboardShell user={user} title="لوحة الطالب" nav={nav} active={active} onChange={setActive} onLogout={onLogout} headerAction={bell}>
     {error && <div className="error-box">{error}</div>}
     {loading ? <div className="loading-panel">جارٍ تحميل بياناتك...</div> : <>
       {active === 'overview' && <><div className="stat-grid"><StatCard label="جلسات المتابعة" value={entries.length} /><StatCard label="إجمالي الصفحات" value={pagesTotal(entries).toFixed(1)} /><StatCard label="متوسط التقييم" value={averageRating(entries).toFixed(1) + ' / 5'} /><StatCard label="آخر متابعة" value={latest?.recordType === 'MATN' ? latest.matnName || 'متن' : latest?.surah || '—'} /></div><section className="admin-panel"><div className="panel-heading"><div><span>آخر تقدم</span><h2>آخر جلسات الحفظ</h2></div></div><ProgressTable entries={entries.slice(0, 8)} /></section></>}
       {active === 'history' && <section className="admin-panel"><div className="panel-heading"><div><span>السجل الكامل</span><h2>تاريخ المتابعة</h2></div></div><ProgressTable entries={entries} /></section>}
+      {active === 'notifications' && <StudentNotificationsPanel onUnreadChange={setUnreadCount} />}
       {active === 'leaves' && <LeaveRequestsPanel user={user} />}
     </>}
   </DashboardShell>;
