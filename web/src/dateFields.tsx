@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 function two(value: number) {
   return String(value).padStart(2, '0');
@@ -35,9 +35,12 @@ export function DateField({
   placeholder?: string;
 }) {
   const [display, setDisplay] = useState(() => isoToDisplay(value));
+  const lastEmitted = useRef(value);
 
   useEffect(() => {
+    if (value === lastEmitted.current) return;
     setDisplay(isoToDisplay(value));
+    lastEmitted.current = value;
   }, [value]);
 
   return (
@@ -55,11 +58,13 @@ export function DateField({
         const next = event.target.value.toUpperCase().replace(/[^0-9-]/g, '');
         setDisplay(next);
         if (!next) {
+          lastEmitted.current = '';
           onChange('');
           return;
         }
         const parsed = displayToIso(next);
-        if (parsed) onChange(parsed);
+        lastEmitted.current = parsed ?? '';
+        onChange(parsed ?? '');
       }}
     />
   );
@@ -91,9 +96,12 @@ export function DateTimeField({
   onChange: (value: string) => void;
 }) {
   const [display, setDisplay] = useState(() => isoDateTimeToDisplay(value));
+  const lastEmitted = useRef(value);
 
   useEffect(() => {
+    if (value === lastEmitted.current) return;
     setDisplay(isoDateTimeToDisplay(value));
+    lastEmitted.current = value;
   }, [value]);
 
   return (
@@ -110,11 +118,13 @@ export function DateTimeField({
         const next = event.target.value.toUpperCase().replace(/[^0-9:\-\s]/g, '');
         setDisplay(next);
         if (!next) {
+          lastEmitted.current = '';
           onChange('');
           return;
         }
         const parsed = displayToLocalDateTime(next);
-        if (parsed) onChange(parsed);
+        lastEmitted.current = parsed ?? '';
+        onChange(parsed ?? '');
       }}
     />
   );
