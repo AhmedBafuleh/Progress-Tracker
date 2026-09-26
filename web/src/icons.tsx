@@ -23,7 +23,8 @@ export type IconName =
   | 'history'
   | 'child'
   | 'chevronLeft'
-  | 'chevronRight';
+  | 'chevronRight'
+  | 'bell';
 
 export function Icon({ name, size = 20, ...props }: SVGProps<SVGSVGElement> & { name: IconName; size?: number }) {
   const common = {
@@ -62,6 +63,7 @@ export function Icon({ name, size = 20, ...props }: SVGProps<SVGSVGElement> & { 
     child: <><circle cx="12" cy="8" r="3"/><path d="M8 14c-2 1-3 3-3 6M16 14c2 1 3 3 3 6"/><path d="M9 13h6l-1 7h-4Z"/></>,
     chevronLeft: <path d="m15 18-6-6 6-6"/>,
     chevronRight: <path d="m9 18 6-6-6-6"/>,
+    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
   };
 
   return <svg {...common} {...props}>{paths[name]}</svg>;
