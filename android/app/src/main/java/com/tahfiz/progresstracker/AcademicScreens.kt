@@ -445,11 +445,14 @@ fun NotesScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
     var showCreate by remember { mutableStateOf(false) }
     val role = state.user?.role.orEmpty()
 
-    val candidates = if (role == "ADMIN") {
-        state.users.filter { it.role == "MANAGER" || it.role == "TEACHER" }
-    } else {
-        val allowedIds = if (role == "TEACHER") state.students.map { it.user.id }.toSet() else state.users.filter { it.role == "STUDENT" }.map { it.id }.toSet()
-        state.users.filter { it.id in allowedIds }
+    val candidateOptions: List<Pair<String, String>> = when (role) {
+        "ADMIN" -> state.users
+            .filter { it.role == "MANAGER" || it.role == "TEACHER" }
+            .map { it.id to it.fullName }
+        "TEACHER" -> state.students.map { it.user.id to it.user.fullName }
+        else -> state.users
+            .filter { it.role == "STUDENT" }
+            .map { it.id to it.fullName }
     }
 
     LazyColumn(
@@ -480,7 +483,7 @@ fun NotesScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
     }
 
     if (showCreate) {
-        var subjectId by remember { mutableStateOf(candidates.firstOrNull()?.id.orEmpty()) }
+        var subjectId by remember { mutableStateOf(candidateOptions.firstOrNull()?.first.orEmpty()) }
         var kind by remember { mutableStateOf("NOTE") }
         var content by remember { mutableStateOf("") }
         AlertDialog(
@@ -488,7 +491,7 @@ fun NotesScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
             title = { Text("إضافة ملاحظة") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SelectionField("الشخص", candidates.firstOrNull { it.id == subjectId }?.fullName.orEmpty(), candidates.map { it.id to it.fullName }, { subjectId = it })
+                    SelectionField("الشخص", candidateOptions.firstOrNull { it.first == subjectId }?.second.orEmpty(), candidateOptions, { subjectId = it })
                     SelectionField("النوع", statusLabel(kind), listOf("NOTE" to "ملاحظة", "VIOLATION" to "مخالفة"), { kind = it })
                     OutlinedTextField(content, { content = it }, Modifier.fillMaxWidth(), label = { Text("التفاصيل") }, minLines = 4)
                 }
@@ -663,7 +666,8 @@ fun NotificationsScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                             when {
                                 value.isBlank() -> null
                                 value.endsWith("Z") -> value
-                                value.length == 16 -> "${value}:00"
+                                value.length == 16 -> "${value}:00Z"
+                                value.length == 19 -> "${value}Z"
                                 else -> value
                             }
                         }
