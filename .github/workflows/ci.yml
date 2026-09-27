@@ -9,6 +9,7 @@ on:
     branches:
       - feature/prototype-foundation
       - feature/reporting-ai
+      - feature/android-full-parity
       - development
       - main
   pull_request:
