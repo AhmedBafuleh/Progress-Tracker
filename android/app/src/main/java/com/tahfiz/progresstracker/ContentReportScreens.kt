@@ -258,9 +258,21 @@ fun MediaScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
     var showCreate by remember { mutableStateOf(false) }
     var pendingAsset by remember { mutableStateOf<PickedFile?>(null) }
     var editActivity by remember { mutableStateOf<ActivityDto?>(null) }
+    var uploadTargetActivityId by remember { mutableStateOf<String?>(null) }
 
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) pendingAsset = readPickedFile(context, uri)
+        if (uri != null) {
+            val file = readPickedFile(context, uri)
+            val targetId = uploadTargetActivityId
+            if (file != null && targetId != null) {
+                viewModel.uploadActivityAsset(targetId, file.bytes, file.mimeType, file.fileName)
+                uploadTargetActivityId = null
+            } else {
+                pendingAsset = file
+            }
+        } else {
+            uploadTargetActivityId = null
+        }
     }
 
     LazyColumn(
@@ -301,6 +313,10 @@ fun MediaScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                     }
                     if (canEdit) {
                         Row {
+                            IconButton(onClick = {
+                                uploadTargetActivityId = activity.id
+                                mediaPicker.launch(arrayOf("image/*", "video/*"))
+                            }) { Icon(Icons.Outlined.AttachFile, contentDescription = "إضافة صورة أو فيديو") }
                             IconButton(onClick = { editActivity = activity }) { Icon(Icons.Outlined.Edit, contentDescription = "تعديل") }
                             IconButton(onClick = { viewModel.deleteActivity(activity.id) }) { Icon(Icons.Outlined.Delete, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error) }
                         }
@@ -449,7 +465,9 @@ fun ReportsScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
     var studentId by remember(state.reportStudents) { mutableStateOf(state.reportStudents.firstOrNull()?.id.orEmpty()) }
     var from by remember { mutableStateOf(daysAgoIso(29)) }
     var to by remember { mutableStateOf(todayIso()) }
+    var halaqahId by remember(state.halaqahs) { mutableStateOf(state.halaqahs.firstOrNull()?.id.orEmpty()) }
     val report = state.selectedReport
+    val halaqahReport = state.halaqahReport
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -538,6 +556,49 @@ fun ReportsScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                 ) {
                     Icon(Icons.Outlined.Print, contentDescription = null)
                     Text("طباعة / حفظ PDF")
+                }
+            }
+        }
+
+        if (state.user?.role == "ADMIN" && state.halaqahs.isNotEmpty()) {
+            item {
+                Spacer(Modifier.height(8.dp))
+                ScreenHeader(
+                    "تقرير إداري شامل",
+                    "تقرير الحلقة",
+                    "ملخص سريع لأداء جميع طلاب الحلقة والاختبارات المسجلة.",
+                )
+            }
+            item {
+                SelectionField(
+                    "الحلقة",
+                    state.halaqahs.firstOrNull { it.id == halaqahId }?.name.orEmpty(),
+                    state.halaqahs.map { it.id to it.name },
+                    { halaqahId = it },
+                )
+            }
+            item {
+                OutlinedButton(
+                    onClick = { viewModel.loadHalaqahReport(halaqahId) },
+                    enabled = halaqahId.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("تحميل تقرير الحلقة") }
+            }
+
+            if (halaqahReport != null && halaqahReport.halaqah.id == halaqahId) {
+                item {
+                    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                            Text(halaqahReport.halaqah.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            LabeledValue("المعلم", halaqahReport.halaqah.teacher?.fullName ?: "غير معيّن")
+                            LabeledValue("عدد الطلاب", halaqahReport.summary.students.toString())
+                            LabeledValue("سجلات المتابعة", halaqahReport.summary.progressRecords.toString())
+                            LabeledValue("الحضور / الغياب", "${halaqahReport.summary.attended} / ${halaqahReport.summary.absent}")
+                            LabeledValue("متوسط التقييم", String.format(Locale.ENGLISH, "%.1f / 5", halaqahReport.summary.averageRating))
+                            LabeledValue("الاختبارات الشهرية", halaqahReport.summary.monthlyTests.toString())
+                            LabeledValue("متوسط الاختبارات", String.format(Locale.ENGLISH, "%.1f / 100", halaqahReport.summary.averageTestScore))
+                        }
+                    }
                 }
             }
         }
