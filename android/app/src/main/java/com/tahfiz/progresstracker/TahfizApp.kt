@@ -1,44 +1,55 @@
 package com.tahfiz.progresstracker
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ExitToApp
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Logout
+import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Divider
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -46,36 +57,23 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.tahfiz.progresstracker.data.CreateProgressRequest
-import com.tahfiz.progresstracker.data.PeriodDto
-import com.tahfiz.progresstracker.data.ProgressEntryDto
-import com.tahfiz.progresstracker.data.StudentDto
-import java.time.LocalDate
-
-private val TahfizColors = lightColorScheme(
-    primary = Color(0xFF234C35),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE6F0E8),
-    onPrimaryContainer = Color(0xFF173625),
-    background = Color(0xFFF5F7F5),
-    surface = Color.White,
-    surfaceVariant = Color(0xFFEEF3EF),
-    onSurfaceVariant = Color(0xFF637068),
-    error = Color(0xFFB42318),
-)
+import kotlinx.coroutines.launch
 
 @Composable
 fun TahfizApp(viewModel: TahfizViewModel = viewModel()) {
@@ -92,20 +90,21 @@ fun TahfizApp(viewModel: TahfizViewModel = viewModel()) {
 
     MaterialTheme(colorScheme = TahfizColors) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-            if (state.user == null) {
-                LoginScreen(
-                    loading = state.loading,
-                    onLogin = viewModel::login,
-                    snackbarHostState = snackbarHostState,
-                )
-            } else {
-                DashboardScreen(
-                    state = state,
-                    snackbarHostState = snackbarHostState,
-                    onLogout = viewModel::logout,
-                    onRefresh = viewModel::refresh,
-                    onCreateProgress = viewModel::createProgress,
-                )
+            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                if (state.user == null) {
+                    LoginScreen(
+                        state = state,
+                        snackbarHostState = snackbarHostState,
+                        onLogin = viewModel::login,
+                        onServerUrlChanged = viewModel::setServerUrl,
+                    )
+                } else {
+                    AuthenticatedApp(
+                        state = state,
+                        viewModel = viewModel,
+                        snackbarHostState = snackbarHostState,
+                    )
+                }
             }
         }
     }
@@ -113,44 +112,78 @@ fun TahfizApp(viewModel: TahfizViewModel = viewModel()) {
 
 @Composable
 private fun LoginScreen(
-    loading: Boolean,
-    onLogin: (String, String) -> Unit,
+    state: TahfizUiState,
     snackbarHostState: SnackbarHostState,
+    onLogin: (String, String) -> Unit,
+    onServerUrlChanged: (String) -> Unit,
 ) {
     var loginId by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
+    var showServer by remember { mutableStateOf(false) }
+    var serverUrl by remember(state.serverUrl) { mutableStateOf(state.serverUrl) }
 
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
         Box(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 22.dp, vertical = 28.dp),
             contentAlignment = Alignment.Center,
         ) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(30.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
             ) {
                 Column(
-                    modifier = Modifier.padding(28.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(15.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text("مركز التحفيظ", fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                    Text("تسجيل الدخول إلى نظام المتابعة", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Box(
+                        modifier = Modifier
+                            .size(86.dp)
+                            .clip(CircleShape)
+                            .background(Color.Transparent),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.dar_al_nur_logo),
+                            contentDescription = "شعار دار النور",
+                            modifier = Modifier.size(82.dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("دار النور لتعليم القرآن الكريم", fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(
+                            "نظام المتابعة والإدارة",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 13.sp,
+                        )
+                    }
+
+                    Spacer(Modifier.height(2.dp))
+
                     OutlinedTextField(
                         value = loginId,
                         onValueChange = { loginId = it },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("معرف المستخدم") },
                         singleLine = true,
+                        shape = RoundedCornerShape(16.dp),
                     )
+
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("كلمة المرور") },
                         singleLine = true,
+                        shape = RoundedCornerShape(16.dp),
                         visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             IconButton(onClick = { showPassword = !showPassword }) {
@@ -161,13 +194,66 @@ private fun LoginScreen(
                             }
                         },
                     )
+
                     Button(
                         onClick = { onLogin(loginId, password) },
-                        enabled = !loading,
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        enabled = !state.loading,
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
                     ) {
-                        if (loading) CircularProgressIndicator(modifier = Modifier.width(22.dp), strokeWidth = 2.dp)
-                        else Text("دخول")
+                        if (state.loading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        } else {
+                            Text("تسجيل الدخول", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    TextButton(onClick = { showServer = !showServer }) {
+                        Icon(Icons.Outlined.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.size(6.dp))
+                        Text(if (showServer) "إخفاء إعدادات الخادم" else "إعدادات الخادم")
+                    }
+
+                    if (showServer) {
+                        Divider()
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(9.dp),
+                        ) {
+                            Text(
+                                "عنوان خادم النظام",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                            )
+                            OutlinedTextField(
+                                value = serverUrl,
+                                onValueChange = { serverUrl = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text("http://192.168.1.10:4000") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                OutlinedButton(
+                                    onClick = { onServerUrlChanged(serverUrl) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp),
+                                ) { Text("حفظ") }
+                                Text(
+                                    "المحاكي: 10.0.2.2",
+                                    modifier = Modifier.align(Alignment.CenterVertically),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -177,340 +263,198 @@ private fun LoginScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DashboardScreen(
+private fun AuthenticatedApp(
     state: TahfizUiState,
+    viewModel: TahfizViewModel,
     snackbarHostState: SnackbarHostState,
-    onLogout: () -> Unit,
-    onRefresh: () -> Unit,
-    onCreateProgress: (CreateProgressRequest) -> Unit,
 ) {
     val user = state.user ?: return
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(user.fullName, fontWeight = FontWeight.Bold)
-                        Text(roleLabel(user.role), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val sections = remember(user.role) { sectionsForRole(user.role) }
+    var selected by remember(user.role) { mutableStateOf(sections.first()) }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = true,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = BrandPurpleDeep,
+                drawerContentColor = Color.White,
+                modifier = Modifier.fillMaxHeight(),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 22.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.dar_al_nur_logo),
+                            contentDescription = null,
+                            modifier = Modifier.size(54.dp),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("دار النور", fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
+                            Text("نظام المتابعة", color = Color.White.copy(alpha = .72f), fontSize = 12.sp)
+                        }
+                        IconButton(onClick = { scope.launch { drawerState.close() } }) {
+                            Icon(Icons.Outlined.Close, contentDescription = "إغلاق", tint = Color.White)
+                        }
                     }
-                },
-                actions = {
-                    IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, contentDescription = "تحديث") }
-                    IconButton(onClick = onLogout) { Icon(Icons.Outlined.ExitToApp, contentDescription = "تسجيل الخروج") }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-            )
-        },
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (user.role) {
-                "ADMIN", "MANAGER" -> ManagementMobileDashboard(state)
-                "TEACHER" -> TeacherMobileDashboard(state, onCreateProgress)
-                "STUDENT" -> StudentMobileDashboard(state)
-                "PARENT" -> ParentMobileDashboard(state)
-                else -> EmptyDashboard("هذا الدور غير مدعوم")
-            }
-            if (state.loading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            }
-        }
-    }
-}
 
-@Composable
-private fun ManagementMobileDashboard(state: TahfizUiState) {
-    val students = state.users.count { it.role == "STUDENT" }
-    val teachers = state.users.count { it.role == "TEACHER" }
-    val active = state.users.count { it.isActive }
-    val pages = state.progress.sumOf { it.pages }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            Text("ملخص الإدارة", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp))
-            SummaryGrid(
-                listOf(
-                    "الحسابات النشطة" to active.toString(),
-                    "الطلاب" to students.toString(),
-                    "المعلمون" to teachers.toString(),
-                    "إجمالي الصفحات" to String.format("%.1f", pages),
-                ),
-            )
-        }
-        item { SectionTitle("الحسابات") }
-        items(state.users.take(30), key = { it.id }) { account ->
-            Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(account.fullName, fontWeight = FontWeight.Bold)
-                    Text("${roleLabel(account.role)} • ${if (account.isActive) "نشط" else "موقوف"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(account.loginId, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-        if (state.users.isEmpty()) item { EmptyDashboard("لا توجد حسابات لعرضها") }
-    }
-}
-
-@Composable
-private fun TeacherMobileDashboard(
-    state: TahfizUiState,
-    onCreateProgress: (CreateProgressRequest) -> Unit,
-) {
-    var showForm by remember { mutableStateOf(false) }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            Text("لوحة المعلم", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp))
-            SummaryGrid(
-                listOf(
-                    "الطلاب" to state.students.size.toString(),
-                    "الجلسات" to state.progress.size.toString(),
-                    "الصفحات" to String.format("%.1f", state.progress.sumOf { it.pages }),
-                    "متوسط التقييم" to averageRating(state.progress),
-                ),
-            )
-        }
-        item {
-            Button(onClick = { showForm = !showForm }, modifier = Modifier.fillMaxWidth()) {
-                Text(if (showForm) "إخفاء نموذج المتابعة" else "تسجيل متابعة جديدة")
-            }
-        }
-        if (showForm) {
-            item {
-                ProgressEntryForm(
-                    students = state.students,
-                    periods = state.periods,
-                    onSubmit = {
-                        onCreateProgress(it)
-                        showForm = false
-                    },
-                )
-            }
-        }
-        item { SectionTitle("آخر المتابعات") }
-        items(state.progress.take(30), key = { it.id }) { entry -> ProgressCard(entry) }
-        if (state.progress.isEmpty()) item { EmptyDashboard("لا توجد سجلات متابعة حتى الآن") }
-    }
-}
-
-@Composable
-private fun StudentMobileDashboard(state: TahfizUiState) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            Text("تقدمي في الحفظ", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp))
-            SummaryGrid(
-                listOf(
-                    "الجلسات" to state.progress.size.toString(),
-                    "الصفحات" to String.format("%.1f", state.progress.sumOf { it.pages }),
-                    "متوسط التقييم" to averageRating(state.progress),
-                    "آخر سورة" to (state.progress.firstOrNull()?.surah ?: "—"),
-                ),
-            )
-        }
-        item { SectionTitle("سجل الحفظ") }
-        items(state.progress, key = { it.id }) { entry -> ProgressCard(entry) }
-        if (state.progress.isEmpty()) item { EmptyDashboard("لا توجد سجلات متابعة بعد") }
-    }
-}
-
-@Composable
-private fun ParentMobileDashboard(state: TahfizUiState) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            Text("متابعة الأبناء", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp))
-            SummaryGrid(
-                listOf(
-                    "الأبناء" to state.children.size.toString(),
-                    "الجلسات" to state.progress.size.toString(),
-                    "الصفحات" to String.format("%.1f", state.progress.sumOf { it.pages }),
-                    "متوسط التقييم" to averageRating(state.progress),
-                ),
-            )
-        }
-        item { SectionTitle("الأبناء المرتبطون") }
-        items(state.children, key = { it.id }) { child ->
-            Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(child.user.fullName, fontWeight = FontWeight.Bold)
-                    Text(child.halaqah.name, color = MaterialTheme.colorScheme.primary)
-                    Text("المعلم: ${child.halaqah.teacher?.fullName ?: "غير معيّن"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-        item { SectionTitle("آخر المتابعات") }
-        items(state.progress.take(30), key = { it.id }) { entry -> ProgressCard(entry) }
-        if (state.children.isEmpty()) item { EmptyDashboard("لا يوجد طالب مرتبط بهذا الحساب") }
-    }
-}
-
-@Composable
-private fun ProgressEntryForm(
-    students: List<StudentDto>,
-    periods: List<PeriodDto>,
-    onSubmit: (CreateProgressRequest) -> Unit,
-) {
-    var studentId by remember(students) { mutableStateOf(students.firstOrNull()?.id.orEmpty()) }
-    var periodId by remember(periods) { mutableStateOf(periods.firstOrNull()?.id.orEmpty()) }
-    var surah by remember { mutableStateOf("") }
-    var verseFrom by remember { mutableStateOf("1") }
-    var verseTo by remember { mutableStateOf("1") }
-    var pages by remember { mutableStateOf("1") }
-    var rating by remember { mutableStateOf("5") }
-    var note by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf(LocalDate.now().toString()) }
-
-    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("بيانات المتابعة", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            DropdownSelector(
-                label = "الطالب",
-                value = students.firstOrNull { it.id == studentId }?.user?.fullName ?: "اختر الطالب",
-                options = students.map { it.id to "${it.user.fullName} - ${it.halaqah.name}" },
-                onSelected = { studentId = it },
-            )
-            DropdownSelector(
-                label = "الفترة",
-                value = periods.firstOrNull { it.id == periodId }?.name ?: "اختر الفترة",
-                options = periods.map { it.id to "${it.name} (${it.startTime})" },
-                onSelected = { periodId = it },
-            )
-            OutlinedTextField(value = surah, onValueChange = { surah = it }, modifier = Modifier.fillMaxWidth(), label = { Text("السورة") }, singleLine = true)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(value = verseFrom, onValueChange = { verseFrom = it.filter(Char::isDigit) }, modifier = Modifier.weight(1f), label = { Text("من الآية") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-                OutlinedTextField(value = verseTo, onValueChange = { verseTo = it.filter(Char::isDigit) }, modifier = Modifier.weight(1f), label = { Text("إلى الآية") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(value = pages, onValueChange = { pages = it }, modifier = Modifier.weight(1f), label = { Text("الصفحات") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true)
-                OutlinedTextField(value = rating, onValueChange = { rating = it.filter(Char::isDigit).take(1) }, modifier = Modifier.weight(1f), label = { Text("التقييم / 5") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-            }
-            OutlinedTextField(value = date, onValueChange = { date = it }, modifier = Modifier.fillMaxWidth(), label = { Text("التاريخ YYYY-MM-DD") }, singleLine = true)
-            OutlinedTextField(value = note, onValueChange = { note = it }, modifier = Modifier.fillMaxWidth(), label = { Text("ملاحظة") }, minLines = 2)
-            Button(
-                onClick = {
-                    val from = verseFrom.toIntOrNull() ?: 1
-                    val to = verseTo.toIntOrNull() ?: from
-                    val pageCount = pages.toDoubleOrNull() ?: 0.0
-                    val score = (rating.toIntOrNull() ?: 5).coerceIn(1, 5)
-                    if (studentId.isNotBlank() && periodId.isNotBlank() && surah.isNotBlank()) {
-                        onSubmit(CreateProgressRequest(studentId, periodId, surah.trim(), from, to, pageCount, score, date, note.ifBlank { null }))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = .08f)),
+                        shape = RoundedCornerShape(18.dp),
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(user.fullName, fontWeight = FontWeight.Bold)
+                            Text(roleLabel(user.role), color = Color.White.copy(alpha = .72f), fontSize = 12.sp)
+                            Text(user.loginId, color = BrandGold, fontSize = 11.sp)
+                        }
                     }
-                },
-                enabled = students.isNotEmpty() && periods.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("حفظ المتابعة") }
-        }
-    }
-}
 
-@Composable
-private fun DropdownSelector(
-    label: String,
-    value: String,
-    options: List<Pair<String, String>>,
-    onSelected: (String) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-        Box(modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text(value, modifier = Modifier.fillMaxWidth()) }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                options.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option.second) },
-                        onClick = {
-                            onSelected(option.first)
-                            expanded = false
-                        },
+                    Spacer(Modifier.height(4.dp))
+
+                    sections.forEach { section ->
+                        NavigationDrawerItem(
+                            label = { Text(section.label, fontWeight = if (selected == section) FontWeight.Bold else FontWeight.Medium) },
+                            icon = { Icon(section.icon, contentDescription = null) },
+                            selected = selected == section,
+                            onClick = {
+                                selected = section
+                                scope.launch { drawerState.close() }
+                            },
+                            colors = NavigationDrawerItemDefaults.colors(
+                                selectedContainerColor = BrandPurple.copy(alpha = .9f),
+                                selectedIconColor = Color.White,
+                                selectedTextColor = Color.White,
+                                unselectedContainerColor = Color.Transparent,
+                                unselectedIconColor = Color.White.copy(alpha = .72f),
+                                unselectedTextColor = Color.White.copy(alpha = .82f),
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                        )
+                    }
+
+                    Spacer(Modifier.weight(1f))
+                    Divider(color = Color.White.copy(alpha = .12f))
+                    NavigationDrawerItem(
+                        label = { Text("تسجيل الخروج") },
+                        icon = { Icon(Icons.Outlined.Logout, contentDescription = null) },
+                        selected = false,
+                        onClick = viewModel::logout,
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color.Transparent,
+                            unselectedIconColor = Color.White,
+                            unselectedTextColor = Color.White,
+                        ),
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun ProgressCard(entry: ProgressEntryDto) {
-    Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(entry.student.user.fullName, fontWeight = FontWeight.Bold)
-                Text("${entry.rating} / 5", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        },
+    ) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
+                TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(Icons.Outlined.Menu, contentDescription = "القائمة")
+                        }
+                    },
+                    title = {
+                        Column {
+                            Text(selected.label, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text(
+                                user.fullName,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp,
+                            )
+                        }
+                    },
+                    actions = {
+                        if (user.role == "STUDENT" && state.unreadCount > 0) {
+                            BadgedBox(
+                                badge = { Badge { Text(if (state.unreadCount > 99) "99+" else state.unreadCount.toString()) } },
+                            ) {
+                                IconButton(onClick = { selected = MobileSection.NOTIFICATIONS }) {
+                                    Icon(MobileSection.NOTIFICATIONS.icon, contentDescription = "الإشعارات")
+                                }
+                            }
+                        }
+                        IconButton(onClick = viewModel::refresh) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = "تحديث")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            },
+        ) { padding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+            ) {
+                SectionContent(section = selected, state = state, viewModel = viewModel)
+                if (state.loading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = .62f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                Text("جارٍ تحميل البيانات...")
+                            }
+                        }
+                    }
+                }
             }
-            Text("سورة ${entry.surah} • الآيات ${entry.verseFrom} - ${entry.verseTo}")
-            Text("${entry.pages} صفحة • ${entry.period.name}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-            Text(entry.recordDate.take(10), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-            entry.note?.takeIf { it.isNotBlank() }?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp) }
         }
     }
 }
 
 @Composable
-private fun SummaryGrid(items: List<Pair<String, String>>) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        items.chunked(2).forEach { rowItems ->
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                rowItems.forEach { item -> SummaryCard(item.first, item.second, Modifier.weight(1f)) }
-                if (rowItems.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
+private fun SectionContent(
+    section: MobileSection,
+    state: TahfizUiState,
+    viewModel: TahfizViewModel,
+) {
+    when (section) {
+        MobileSection.OVERVIEW -> OverviewScreen(state)
+        MobileSection.USERS -> UsersScreen(state, viewModel)
+        MobileSection.HALAQAHS -> HalaqahsScreen(state, viewModel)
+        MobileSection.PARENT_LINKS -> ParentLinksScreen(state, viewModel)
+        MobileSection.RECORD -> ProgressRecorderScreen(state, viewModel)
+        MobileSection.STUDENTS -> StudentsScreen(state)
+        MobileSection.HISTORY -> ProgressHistoryScreen(state, viewModel)
+        MobileSection.TESTS -> MonthlyTestsScreen(state, viewModel)
+        MobileSection.NOTES -> NotesScreen(state, viewModel)
+        MobileSection.LEAVES -> LeavesScreen(state, viewModel)
+        MobileSection.NOTIFICATIONS -> NotificationsScreen(state, viewModel)
+        MobileSection.LIBRARY -> LibraryScreen(state, viewModel)
+        MobileSection.MEDIA -> MediaScreen(state, viewModel)
+        MobileSection.HOME_EDITOR -> HomeEditorScreen(state, viewModel)
+        MobileSection.PERIODS -> PeriodsScreen(state, viewModel)
+        MobileSection.REPORTS -> ReportsScreen(state, viewModel)
+        MobileSection.AI -> AiAssistantScreen(state, viewModel)
+        MobileSection.CHILDREN -> ChildrenScreen(state)
     }
-}
-
-@Composable
-private fun SummaryCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(16.dp)) {
-            Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-            Spacer(Modifier.height(8.dp))
-            Text(value, fontWeight = FontWeight.Bold, fontSize = 21.sp)
-        }
-    }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 4.dp))
-}
-
-@Composable
-private fun EmptyDashboard(text: String) {
-    Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-        Text(text, modifier = Modifier.padding(22.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-private fun roleLabel(role: String): String = when (role) {
-    "ADMIN" -> "المدير"
-    "MANAGER" -> "المشرف"
-    "TEACHER" -> "المعلم"
-    "STUDENT" -> "الطالب"
-    "PARENT" -> "ولي الأمر"
-    else -> role
-}
-
-private fun averageRating(entries: List<ProgressEntryDto>): String {
-    if (entries.isEmpty()) return "0.0 / 5"
-    return String.format("%.1f / 5", entries.map { it.rating }.average())
 }
