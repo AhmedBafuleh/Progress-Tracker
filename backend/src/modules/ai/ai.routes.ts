@@ -54,19 +54,58 @@ const resultSchema = {
   required: ['title', 'summary', 'trajectory', 'recommendations', 'evidence', 'limitations', 'answer'],
 } as const;
 
-function extractOutputText(payload: any) {
-  const chunks: string[] = [];
-  for (const item of payload?.output ?? []) {
-    if (item?.type !== 'message') continue;
-    for (const content of item.content ?? []) {
-      if (content?.type === 'output_text' && typeof content.text === 'string') chunks.push(content.text);
+function aiUrl(path: string) {
+  return `${env.LOCAL_AI_BASE_URL.replace(/\/$/, '')}${path}`;
+}
+
+async function localAiFetch(path: string, init?: RequestInit) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), env.LOCAL_AI_TIMEOUT_MS);
+
+  try {
+    return await fetch(aiUrl(path), { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new AppError('انتهت مهلة انتظار نموذج الذكاء الاصطناعي المحلي', 504, 'LOCAL_AI_TIMEOUT');
     }
+    throw new AppError(
+      'تعذر الاتصال بخادم الذكاء الاصطناعي المحلي. تأكد من تشغيله على خادم المؤسسة.',
+      503,
+      'LOCAL_AI_UNAVAILABLE',
+    );
+  } finally {
+    clearTimeout(timeout);
   }
-  return chunks.join('\n').trim();
 }
 
 router.get('/status', async (_req, res) => {
-  res.json({ configured: Boolean(env.OPENAI_API_KEY), model: env.OPENAI_MODEL });
+  try {
+    const response = await localAiFetch('/api/tags');
+    if (!response.ok) {
+      return res.json({ configured: false, model: env.LOCAL_AI_MODEL, provider: 'LOCAL', baseUrl: env.LOCAL_AI_BASE_URL });
+    }
+
+    const payload = await response.json() as { models?: Array<{ name?: string; model?: string }> };
+    const installed = (payload.models ?? []).some((item) =>
+      item.name === env.LOCAL_AI_MODEL || item.model === env.LOCAL_AI_MODEL,
+    );
+
+    return res.json({
+      configured: installed,
+      connected: true,
+      model: env.LOCAL_AI_MODEL,
+      provider: 'LOCAL',
+      baseUrl: env.LOCAL_AI_BASE_URL,
+    });
+  } catch {
+    return res.json({
+      configured: false,
+      connected: false,
+      model: env.LOCAL_AI_MODEL,
+      provider: 'LOCAL',
+      baseUrl: env.LOCAL_AI_BASE_URL,
+    });
+  }
 });
 
 router.get('/people', async (_req, res, next) => {
@@ -79,14 +118,6 @@ router.get('/people', async (_req, res, next) => {
 
 router.post('/analyze', async (req, res, next) => {
   try {
-    if (!env.OPENAI_API_KEY) {
-      throw new AppError(
-        'ميزة الذكاء الاصطناعي غير مهيأة بعد. أضف OPENAI_API_KEY إلى ملف backend/.env.',
-        503,
-        'AI_NOT_CONFIGURED',
-      );
-    }
-
     const input = requestSchema.parse(req.body);
     const context = await buildPersonContext(input.userId, input.from, input.to);
     const audienceLabels: Record<string, string> = {
@@ -99,6 +130,7 @@ router.post('/analyze', async (req, res, next) => {
 
     const systemPrompt = [
       'You are the private institutional analysis assistant for Dar Al-Nur Quran education center.',
+      'You are running locally on the institution server. Do not request external information.',
       'Respond in clear professional Arabic.',
       'Use ONLY the supplied institutional context. Never invent facts, scores, motives, diagnoses, or events.',
       'Treat forecasts as cautious trajectory estimates, never certainties.',
@@ -108,6 +140,7 @@ router.post('/analyze', async (req, res, next) => {
       `The intended report audience is: ${audienceLabels[input.audience]}.`,
       'If the audience is a student or parent, use constructive, respectful wording and omit unnecessary internal administrative framing.',
       'If data is insufficient, say so explicitly in limitations and trajectory.',
+      'Return valid JSON matching the supplied schema.',
     ].join(' ');
 
     const userPrompt = JSON.stringify({
@@ -116,48 +149,44 @@ router.post('/analyze', async (req, res, next) => {
       previousAnswers: input.previousAnswers,
     });
 
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    const response = await localAiFetch('/api/chat', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: env.OPENAI_MODEL,
-        store: false,
-        input: [
+        model: env.LOCAL_AI_MODEL,
+        stream: false,
+        messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'institution_analysis',
-            strict: true,
-            schema: resultSchema,
-          },
-        },
+        format: resultSchema,
+        options: { temperature: 0 },
       }),
     });
 
-    const raw = await response.json() as any;
+    const raw = await response.json() as {
+      message?: { content?: string };
+      error?: string;
+    };
+
     if (!response.ok) {
-      const providerMessage = raw?.error?.message;
       throw new AppError(
-        providerMessage ? `تعذر تشغيل الذكاء الاصطناعي: ${providerMessage}` : 'تعذر تشغيل الذكاء الاصطناعي',
+        raw.error ? `تعذر تشغيل الذكاء الاصطناعي المحلي: ${raw.error}` : 'تعذر تشغيل الذكاء الاصطناعي المحلي',
         502,
-        'AI_PROVIDER_ERROR',
+        'LOCAL_AI_ERROR',
       );
     }
 
-    const outputText = extractOutputText(raw);
-    if (!outputText) throw new AppError('لم يرجع نموذج الذكاء الاصطناعي نصًا صالحًا', 502, 'AI_EMPTY_RESPONSE');
+    const outputText = raw.message?.content?.trim();
+    if (!outputText) {
+      throw new AppError('لم يرجع النموذج المحلي نصًا صالحًا', 502, 'LOCAL_AI_EMPTY_RESPONSE');
+    }
 
     let analysis: unknown;
     try {
       analysis = JSON.parse(outputText);
     } catch {
-      throw new AppError('تعذر قراءة نتيجة الذكاء الاصطناعي', 502, 'AI_INVALID_RESPONSE');
+      throw new AppError('تعذر قراءة نتيجة النموذج المحلي', 502, 'LOCAL_AI_INVALID_RESPONSE');
     }
 
     res.json({
@@ -165,7 +194,8 @@ router.post('/analyze', async (req, res, next) => {
       subject: (context as any).subject,
       period: (context as any).period,
       audience: input.audience,
-      model: env.OPENAI_MODEL,
+      model: env.LOCAL_AI_MODEL,
+      provider: 'LOCAL',
     });
   } catch (error) {
     next(error);
