@@ -234,6 +234,93 @@ export type StudentNotification = {
   recipient?: { id: string; loginId: string; fullName: string; role: Role };
 };
 
+
+export type ReportStudent = {
+  id: string;
+  memorizedAmount?: string | null;
+  user: {
+    id: string;
+    loginId: string;
+    fullName: string;
+    email?: string | null;
+    mobile?: string | null;
+    age?: number | null;
+    joinedAt?: string | null;
+    isActive: boolean;
+  };
+  halaqah: {
+    id: string;
+    name: string;
+    teacher?: { id: string; loginId: string; fullName: string } | null;
+  };
+  dormitory?: { building: string; room: string } | null;
+};
+
+export type StudentPerformanceReport = {
+  student: ReportStudent;
+  period: {
+    from: string;
+    to: string;
+    previousFrom: string;
+    previousTo: string;
+  };
+  summary: {
+    sessions: number;
+    attended: number;
+    absent: number;
+    attendanceRate: number;
+    totalPages: number;
+    averageRating: number;
+    tests: number;
+    averageTestScore: number;
+    latestTestScore?: number | null;
+    recordTypes: Record<string, { count: number; averageRating: number; pages: number }>;
+  };
+  trend: {
+    rating: { current: number; previous: number; direction: string };
+    tests: { current: number; previous: number; direction: string };
+  };
+  progress: ProgressEntry[];
+  tests: MonthlyTest[];
+};
+
+export type AiPerson = {
+  id: string;
+  loginId: string;
+  fullName: string;
+  role: Role;
+  studentProfile?: {
+    id: string;
+    memorizedAmount?: string | null;
+    halaqah: { id: string; name: string };
+  } | null;
+};
+
+export type AiAnalysis = {
+  title: string;
+  summary: string;
+  trajectory: {
+    label: 'IMPROVING' | 'STABLE' | 'DECLINING' | 'INSUFFICIENT_DATA' | 'NOT_APPLICABLE';
+    explanation: string;
+  };
+  recommendations: Array<{
+    title: string;
+    reason: string;
+    priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  }>;
+  evidence: string[];
+  limitations: string[];
+  answer: string;
+};
+
+export type AiAnalysisResponse = {
+  analysis: AiAnalysis;
+  subject: { id: string; loginId: string; fullName: string; role: Role };
+  period: { from: string; to: string };
+  audience: 'ADMIN' | 'STUDENT' | 'PARENT' | 'TEACHER' | 'MANAGER';
+  model: string;
+};
+
 export type ParentLink = {
   id: string;
   createdAt: string;
@@ -464,4 +551,21 @@ export const api = {
     }),
   markAllNotificationsRead: () =>
     request<{ message: string }>('/notifications/read-all', { method: 'PATCH' }),
+
+  listReportStudents: () => request<{ students: ReportStudent[] }>('/reports/students'),
+  getStudentReport: (studentId: string, from?: string, to?: string) => {
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const query = params.toString();
+    return request<{ report: StudentPerformanceReport }>(`/reports/students/${studentId}${query ? `?${query}` : ''}`);
+  },
+
+  getAiStatus: () => request<{ configured: boolean; model: string }>('/ai/status'),
+  listAiPeople: () => request<{ people: AiPerson[] }>('/ai/people'),
+  analyzePerson: (payload: Record<string, unknown>) =>
+    request<AiAnalysisResponse>('/ai/analyze', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };
