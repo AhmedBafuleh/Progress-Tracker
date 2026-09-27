@@ -21,6 +21,7 @@ import {
 import { Icon, type IconName } from './icons';
 import { DateField } from './dateFields';
 import { DailyProgressRecorder, HalaqahReportPanel, LeaveRequestsPanel, MonthlyTestsPanel, NotesPanel, NotificationManagerPanel, StudentNotificationsPanel } from './academic';
+import { AdminAiAssistantPanel, StandardStudentReportsPanel } from './reporting';
 
 const roleLabels: Record<Role, string> = {
   ADMIN: 'المدير',
@@ -63,7 +64,7 @@ function accountPrefix(role: CreatableRole) {
   return accountPrefixes[role];
 }
 
-type ManagementTab = 'overview' | 'users' | 'halaqahs' | 'parents' | 'record' | 'tests' | 'notes' | 'leaves' | 'notifications' | 'library' | 'media' | 'home' | 'schedule' | 'reports';
+type ManagementTab = 'overview' | 'users' | 'halaqahs' | 'parents' | 'record' | 'tests' | 'notes' | 'leaves' | 'notifications' | 'library' | 'media' | 'home' | 'schedule' | 'reports' | 'ai';
 
 type NavItem<T extends string> = { id: T; label: string; icon: IconName };
 
@@ -445,6 +446,7 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
     );
     if (isAdmin) items.push({ id: 'home', label: 'الصفحة الرئيسية', icon: 'home' });
     items.push({ id: 'schedule', label: 'الفترات', icon: 'clock' }, { id: 'reports', label: 'التقارير', icon: 'chart' });
+    if (isAdmin) items.push({ id: 'ai', label: 'المساعد الذكي', icon: 'sparkles' });
     return items;
   }, [isAdmin]);
 
@@ -525,7 +527,8 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
       {!loading && active === 'media' && <MediaManager items={media} onChanged={flash} onError={fail} />}
       {!loading && active === 'home' && isAdmin && <HomeEditor home={home} onChanged={flash} onError={fail} />}
       {!loading && active === 'schedule' && <ScheduleManager periods={periods} canEdit={isAdmin} onChanged={flash} onError={fail} />}
-      {!loading && active === 'reports' && <><ReportsPanel users={users} halaqahs={halaqahs} entries={progress} />{isAdmin && <HalaqahReportPanel halaqahs={halaqahs} />}</>}
+      {!loading && active === 'reports' && <><StandardStudentReportsPanel user={user} /><ReportsPanel users={users} halaqahs={halaqahs} entries={progress} />{isAdmin && <HalaqahReportPanel halaqahs={halaqahs} />}</>}
+      {!loading && active === 'ai' && isAdmin && <AdminAiAssistantPanel />}
     </DashboardShell>
   );
 }
@@ -1084,7 +1087,7 @@ function ReportsPanel({ users, halaqahs, entries }: { users: ManagedUser[]; hala
 }
 
 function TeacherDashboard({ user, onLogout }: { user: SessionUser | null; onLogout: () => void }) {
-  type Tab = 'overview' | 'record' | 'students' | 'history' | 'tests' | 'notes' | 'leaves';
+  type Tab = 'overview' | 'record' | 'students' | 'history' | 'reports' | 'tests' | 'notes' | 'leaves';
   const [active, setActive] = useState<Tab>('overview');
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [entries, setEntries] = useState<ProgressEntry[]>([]);
@@ -1095,6 +1098,7 @@ function TeacherDashboard({ user, onLogout }: { user: SessionUser | null; onLogo
     { id: 'record', label: 'تسجيل المتابعة', icon: 'edit' },
     { id: 'students', label: 'طلابي', icon: 'users' },
     { id: 'history', label: 'سجل المتابعة', icon: 'history' },
+    { id: 'reports', label: 'تقارير الطلاب', icon: 'chart' },
     { id: 'tests', label: 'الاختبارات الشهرية', icon: 'check' },
     { id: 'notes', label: 'ملاحظات الطلاب', icon: 'file' },
     { id: 'leaves', label: 'الإجازات', icon: 'clock' },
@@ -1124,6 +1128,7 @@ function TeacherDashboard({ user, onLogout }: { user: SessionUser | null; onLogo
       {active === 'record' && <DailyProgressRecorder user={user} onSaved={() => void refresh()} />}
       {active === 'students' && <section className="admin-panel"><div className="panel-heading"><div><span>الحلقات المسندة</span><h2>قائمة الطلاب</h2></div></div><div className="student-grid">{students.map((student) => <div className="student-card" key={student.id}><div className="student-avatar"><Icon name="user" /></div><strong>{student.user.fullName}</strong><span>{student.halaqah.name}</span>{student.dormitory && <small>مبنى {student.dormitory.building} • غرفة {student.dormitory.room}</small>}</div>)}</div></section>}
       {active === 'history' && <section className="admin-panel"><div className="panel-heading"><div><span>السجل الأكاديمي</span><h2>متابعات الطلاب</h2></div></div><ProgressTable entries={entries} onDelete={remove} /></section>}
+      {active === 'reports' && <StandardStudentReportsPanel user={user} />}
       {active === 'tests' && <MonthlyTestsPanel user={user} />}
       {active === 'notes' && <NotesPanel user={user} />}
       {active === 'leaves' && <LeaveRequestsPanel user={user} />}
@@ -1143,7 +1148,7 @@ function ProgressTable({ entries, compact = false, onDelete }: { entries: Progre
 }
 
 function StudentDashboard({ user, onLogout }: { user: SessionUser | null; onLogout: () => void }) {
-  type Tab = 'overview' | 'history' | 'leaves' | 'notifications';
+  type Tab = 'overview' | 'history' | 'report' | 'leaves' | 'notifications';
   const [active, setActive] = useState<Tab>('overview');
   const [entries, setEntries] = useState<ProgressEntry[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -1152,6 +1157,7 @@ function StudentDashboard({ user, onLogout }: { user: SessionUser | null; onLogo
   const nav: NavItem<Tab>[] = [
     { id: 'overview', label: 'ملخص تقدمي', icon: 'chart' },
     { id: 'history', label: 'سجل الحفظ', icon: 'history' },
+    { id: 'report', label: 'تقريري', icon: 'chart' },
     { id: 'notifications', label: 'الإشعارات', icon: 'bell' },
     { id: 'leaves', label: 'الإجازات', icon: 'clock' },
   ];
@@ -1177,6 +1183,7 @@ function StudentDashboard({ user, onLogout }: { user: SessionUser | null; onLogo
     {loading ? <div className="loading-panel">جارٍ تحميل بياناتك...</div> : <>
       {active === 'overview' && <><div className="stat-grid"><StatCard label="جلسات المتابعة" value={entries.length} /><StatCard label="إجمالي الصفحات" value={pagesTotal(entries).toFixed(1)} /><StatCard label="متوسط التقييم" value={averageRating(entries).toFixed(1) + ' / 5'} /><StatCard label="آخر متابعة" value={latest?.recordType === 'MATN' ? latest.matnName || 'متن' : latest?.surah || '—'} /></div><section className="admin-panel"><div className="panel-heading"><div><span>آخر تقدم</span><h2>آخر جلسات الحفظ</h2></div></div><ProgressTable entries={entries.slice(0, 8)} /></section></>}
       {active === 'history' && <section className="admin-panel"><div className="panel-heading"><div><span>السجل الكامل</span><h2>تاريخ المتابعة</h2></div></div><ProgressTable entries={entries} /></section>}
+      {active === 'report' && <StandardStudentReportsPanel user={user} />}
       {active === 'notifications' && <StudentNotificationsPanel onUnreadChange={setUnreadCount} />}
       {active === 'leaves' && <LeaveRequestsPanel user={user} />}
     </>}
@@ -1184,15 +1191,15 @@ function StudentDashboard({ user, onLogout }: { user: SessionUser | null; onLogo
 }
 
 function ParentDashboard({ user, onLogout }: { user: SessionUser | null; onLogout: () => void }) {
-  type Tab = 'overview' | 'children' | 'history';
+  type Tab = 'overview' | 'children' | 'history' | 'reports';
   const [active, setActive] = useState<Tab>('overview');
   const [children, setChildren] = useState<StudentOption[]>([]); const [entries, setEntries] = useState<ProgressEntry[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [childFilter, setChildFilter] = useState('');
-  const nav: NavItem<Tab>[] = [{ id: 'overview', label: 'نظرة عامة', icon: 'home' }, { id: 'children', label: 'الأبناء', icon: 'child' }, { id: 'history', label: 'سجل المتابعة', icon: 'history' }];
+  const nav: NavItem<Tab>[] = [{ id: 'overview', label: 'نظرة عامة', icon: 'home' }, { id: 'children', label: 'الأبناء', icon: 'child' }, { id: 'history', label: 'سجل المتابعة', icon: 'history' }, { id: 'reports', label: 'تقارير الأبناء', icon: 'chart' }];
   useEffect(() => { void Promise.all([api.listChildren(), api.listProgress()]).then(([c, e]) => { setChildren(c.children); setEntries(e.entries); setChildFilter(c.children[0]?.id || ''); }).catch((err) => setError(err instanceof Error ? err.message : 'تعذر تحميل البيانات')).finally(() => setLoading(false)); }, []);
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'PARENT') return <Navigate to={routeForRole(user.role)} replace />;
   const filtered = childFilter ? entries.filter((entry) => entry.student.id === childFilter) : entries;
-  return <DashboardShell user={user} title="لوحة ولي الأمر" nav={nav} active={active} onChange={setActive} onLogout={onLogout}>{error && <div className="error-box">{error}</div>}{loading ? <div className="loading-panel">جارٍ تحميل البيانات...</div> : <>{active === 'overview' && <><div className="stat-grid"><StatCard label="الأبناء المرتبطون" value={children.length} /><StatCard label="جلسات المتابعة" value={entries.length} /><StatCard label="إجمالي الصفحات" value={pagesTotal(entries).toFixed(1)} /><StatCard label="متوسط التقييم" value={`${averageRating(entries).toFixed(1)} / 5`} /></div><section className="admin-panel"><div className="panel-heading"><div><span>آخر المستجدات</span><h2>أحدث المتابعات</h2></div></div><ProgressTable entries={entries.slice(0, 8)} /></section></>}{active === 'children' && <section className="admin-panel"><div className="panel-heading"><div><span>الحسابات المرتبطة</span><h2>الأبناء</h2></div></div><div className="student-grid">{children.map((child) => <div className="student-card" key={child.id}><div className="student-avatar"><Icon name="child" /></div><strong>{child.user.fullName}</strong><span>{child.halaqah.name}</span><small>المعلم: {child.halaqah.teacher?.fullName || 'غير معيّن'}</small></div>)}</div>{children.length === 0 && <EmptyState title="لا يوجد طالب مرتبط بحسابك" />}</section>}{active === 'history' && <section className="admin-panel"><div className="panel-heading"><div><span>التقدم الأكاديمي</span><h2>سجل المتابعة</h2></div>{children.length > 1 && <select className="filter-select" value={childFilter} onChange={(e) => setChildFilter(e.target.value)}><option value="">جميع الأبناء</option>{children.map((child) => <option key={child.id} value={child.id}>{child.user.fullName}</option>)}</select>}</div><ProgressTable entries={filtered} /></section>}</>}</DashboardShell>;
+  return <DashboardShell user={user} title="لوحة ولي الأمر" nav={nav} active={active} onChange={setActive} onLogout={onLogout}>{error && <div className="error-box">{error}</div>}{loading ? <div className="loading-panel">جارٍ تحميل البيانات...</div> : <>{active === 'overview' && <><div className="stat-grid"><StatCard label="الأبناء المرتبطون" value={children.length} /><StatCard label="جلسات المتابعة" value={entries.length} /><StatCard label="إجمالي الصفحات" value={pagesTotal(entries).toFixed(1)} /><StatCard label="متوسط التقييم" value={`${averageRating(entries).toFixed(1)} / 5`} /></div><section className="admin-panel"><div className="panel-heading"><div><span>آخر المستجدات</span><h2>أحدث المتابعات</h2></div></div><ProgressTable entries={entries.slice(0, 8)} /></section></>}{active === 'children' && <section className="admin-panel"><div className="panel-heading"><div><span>الحسابات المرتبطة</span><h2>الأبناء</h2></div></div><div className="student-grid">{children.map((child) => <div className="student-card" key={child.id}><div className="student-avatar"><Icon name="child" /></div><strong>{child.user.fullName}</strong><span>{child.halaqah.name}</span><small>المعلم: {child.halaqah.teacher?.fullName || 'غير معيّن'}</small></div>)}</div>{children.length === 0 && <EmptyState title="لا يوجد طالب مرتبط بحسابك" />}</section>}{active === 'history' && <section className="admin-panel"><div className="panel-heading"><div><span>التقدم الأكاديمي</span><h2>سجل المتابعة</h2></div>{children.length > 1 && <select className="filter-select" value={childFilter} onChange={(e) => setChildFilter(e.target.value)}><option value="">جميع الأبناء</option>{children.map((child) => <option key={child.id} value={child.id}>{child.user.fullName}</option>)}</select>}</div><ProgressTable entries={filtered} /></section>}{active === 'reports' && <StandardStudentReportsPanel user={user} />}</>}</DashboardShell>;
 }
 
 export default function App() {
