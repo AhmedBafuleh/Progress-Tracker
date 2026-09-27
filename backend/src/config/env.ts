@@ -11,11 +11,9 @@ const envSchema = z.object({
   PASSWORD_ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, 'PASSWORD_ENCRYPTION_KEY must be exactly 64 hexadecimal characters'),
-  OPENAI_API_KEY: z.preprocess(
-    (value) => value === '' ? undefined : value,
-    z.string().min(20).optional(),
-  ),
-  OPENAI_MODEL: z.string().min(1).default('gpt-6-astra'),
+  LOCAL_AI_BASE_URL: z.string().url().default('http://127.0.0.1:11434'),
+  LOCAL_AI_MODEL: z.string().min(1).default('gpt-oss:20b'),
+  LOCAL_AI_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
 });
 
 const parsed = envSchema.safeParse(process.env);
