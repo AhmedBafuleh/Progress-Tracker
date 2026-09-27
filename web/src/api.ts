@@ -561,7 +561,7 @@ export const api = {
     return request<{ report: StudentPerformanceReport }>(`/reports/students/${studentId}${query ? `?${query}` : ''}`);
   },
 
-  getAiStatus: () => request<{ configured: boolean; model: string }>('/ai/status'),
+  getAiStatus: () => request<{ configured: boolean; connected?: boolean; model: string; provider?: string; baseUrl?: string }>('/ai/status'),
   listAiPeople: () => request<{ people: AiPerson[] }>('/ai/people'),
   analyzePerson: (payload: Record<string, unknown>) =>
     request<AiAnalysisResponse>('/ai/analyze', {
