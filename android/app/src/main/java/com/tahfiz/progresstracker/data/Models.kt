@@ -4,9 +4,9 @@ package com.tahfiz.progresstracker.data
 
 data class UserDto(
     val id: String,
-    val loginId: String,
+    val loginId: String = "",
     val fullName: String,
-    val role: String,
+    val role: String = "",
 )
 
 data class LoginRequest(val loginId: String, val password: String)
