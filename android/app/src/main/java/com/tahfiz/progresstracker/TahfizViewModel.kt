@@ -35,6 +35,7 @@ data class TahfizUiState(
     val home: HomeContentDto? = null,
     val reportStudents: List<ReportStudentDto> = emptyList(),
     val selectedReport: StudentPerformanceReportDto? = null,
+    val halaqahReport: HalaqahReportDto? = null,
     val aiStatus: AiStatusResponse? = null,
     val aiPeople: List<AiPersonDto> = emptyList(),
     val aiResult: AiAnalysisResponse? = null,
@@ -490,6 +491,20 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
         ApiClient.api.deleteActivity(id).message
     }
 
+    fun uploadActivityAsset(
+        activityId: String,
+        bytes: ByteArray,
+        mimeType: String,
+        fileName: String,
+    ) = mutate("تعذر رفع الملف") {
+        ApiClient.api.uploadActivityAsset(
+            activityId,
+            mimeType,
+            ApiClient.encodedFileName(fileName),
+            ApiClient.requestBody(bytes, mimeType),
+        ).message
+    }
+
     fun deleteActivityAsset(activityId: String, assetId: String) = mutate("تعذر حذف الملف") {
         ApiClient.api.deleteActivityAsset(activityId, assetId).message
     }
@@ -504,6 +519,20 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
                     _state.value = _state.value.copy(
                         loading = false,
                         error = ApiClient.friendlyError(it, "تعذر تحميل التقرير"),
+                    )
+                }
+        }
+    }
+
+    fun loadHalaqahReport(halaqahId: String) {
+        _state.value = _state.value.copy(loading = true, error = null)
+        viewModelScope.launch {
+            runCatching { ApiClient.api.halaqahReport(halaqahId).report }
+                .onSuccess { _state.value = _state.value.copy(loading = false, halaqahReport = it) }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        loading = false,
+                        error = ApiClient.friendlyError(it, "تعذر تحميل تقرير الحلقة"),
                     )
                 }
         }
