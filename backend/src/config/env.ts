@@ -11,6 +11,8 @@ const envSchema = z.object({
   PASSWORD_ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, 'PASSWORD_ENCRYPTION_KEY must be exactly 64 hexadecimal characters'),
+  OPENAI_API_KEY: z.string().min(20).optional(),
+  OPENAI_MODEL: z.string().min(1).default('gpt-6-astra'),
 });
 
 const parsed = envSchema.safeParse(process.env);
