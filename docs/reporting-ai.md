@@ -2,7 +2,7 @@
 
 ## Standard reports
 
-Standard reports are deterministic and do not require an AI provider.
+Standard reports are deterministic and do not require an AI model.
 
 Access rules:
 
@@ -14,11 +14,13 @@ Access rules:
 
 Reports include attendance, total pages, average rating, Hifz / near-review / far-review / Matn breakdowns, monthly-test results, and period-to-period trends.
 
-## Admin-only AI assistant
+## Admin-only private AI assistant
 
 Only the **ADMIN** role can access `/api/ai/*` endpoints and the `المساعد الذكي` dashboard section.
 
-The AI context is assembled on the backend from authorized application records. It does not send passwords, recoverable credentials, addresses, phone numbers, or email addresses to the model provider.
+The AI model is intended to run on the institution's own server. The application does not require an external AI API or a cloud AI subscription.
+
+The backend assembles the authorized institutional context locally and sends it only to the configured local AI service. Passwords, recoverable credentials, addresses, phone numbers, and email addresses are excluded from the AI context.
 
 The assistant can:
 
@@ -32,22 +34,32 @@ The assistant can:
 
 For staff and parents, the assistant only summarizes data that exists in the system. It does not invent an academic performance score for non-students.
 
-## Local AI configuration
+## Local model server
 
-The backend can run normally without AI configured.
-
-To enable the AI assistant, add these values to **backend/.env**:
+The default implementation uses Ollama on the same machine as the backend:
 
 ```env
-OPENAI_API_KEY="your-api-key"
-OPENAI_MODEL="gpt-6-astra"
+LOCAL_AI_BASE_URL="http://127.0.0.1:11434"
+LOCAL_AI_MODEL="gpt-oss:20b"
+LOCAL_AI_TIMEOUT_MS=120000
 ```
 
-Never commit the real API key or paste it into source code.
+Example setup on the college server:
 
-Restart the backend after changing `.env`.
+```bash
+ollama pull gpt-oss:20b
+ollama serve
+```
 
-The AI provider integration uses the OpenAI Responses API with Structured Outputs and `store: false`.
+The model name is configurable. Choose a model that fits the college server's CPU/GPU/RAM capacity and Arabic-language quality requirements.
+
+Keep the AI endpoint on localhost or a private institutional network. Do not expose Ollama directly to the public Internet.
+
+The backend calls Ollama's local `/api/chat` endpoint with structured JSON output and temperature 0. The model response is parsed into the fixed application report structure.
+
+## Alternative serving stack
+
+For a dedicated Linux GPU server, the same architecture can later be adapted to vLLM. vLLM exposes OpenAI-compatible local HTTP endpoints and is suitable for higher-throughput GPU serving.
 
 ## PDF
 
