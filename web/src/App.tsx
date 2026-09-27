@@ -92,7 +92,7 @@ function averageRating(entries: ProgressEntry[]) {
 }
 
 function BrandLogo() {
-  return <img className="brand-logo" src="/dar-al-nur-logo.jpg" alt="شعار دار النور لتعليم القرآن الكريم" />;
+  return <img className="brand-logo" src="/dar-al-nur-logo-transparent.png" alt="شعار دار النور لتعليم القرآن الكريم" />;
 }
 
 function PublicLayout({ children, user }: { children: ReactNode; user: SessionUser | null }) {
