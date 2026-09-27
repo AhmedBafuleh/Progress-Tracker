@@ -2,17 +2,39 @@
 
 نظام إدارة ومتابعة تحفيظ القرآن الكريم.
 
-## Prototype goal
+## Current implementation
 
-The current prototype is intentionally scoped to demonstrate a working vertical slice of the system:
+The web system now provides a complete role-based workflow backed by PostgreSQL and Prisma:
 
 - Arabic-first, right-to-left public website.
-- Public pages for the Tahfiz introduction, library, media/activities, and login.
-- Working Admin authentication.
-- Working Admin user-management flow for Manager, Teacher, Student, and Parent accounts.
-- Student creation includes Halaqah and dormitory assignment.
-- Parent-to-student linking can be added later.
-- Non-Admin accounts are stored and authenticated correctly; until their portals are implemented they receive the Arabic message: **لوحة التحكم قيد التطوير**.
+- Editable Home page content.
+- Editable Library page.
+- Editable Media and Activities page.
+- Authentication for Admin, Manager, Teacher, Student, and Parent.
+- Admin and Manager account management with role restrictions.
+- Student Halaqah and dormitory assignment.
+- Halaqah creation and teacher assignment.
+- Parent-to-student linking.
+- Schedule-period management.
+- Teacher daily memorization-progress entry.
+- Student personal progress dashboard.
+- Parent child-progress dashboard.
+- Administrative reports and progress summaries.
+- Password reveal/reset workflow for authorized roles.
+- Account activation/deactivation and protected deletion.
+
+## Permissions
+
+| Capability | Admin | Manager | Teacher | Student | Parent |
+| --- | --- | --- | --- | --- | --- |
+| Manage users | Full non-Admin management | Teacher / Student / Parent | No | No | No |
+| Create Manager | Yes | No | No | No | No |
+| Edit Home page | Yes | No | No | No | No |
+| Edit Library | Yes | Yes | No | No | No |
+| Edit Media | Yes | Yes | No | No | No |
+| Manage Halaqahs | Yes | Assignment through student management | No | No | No |
+| Record progress | View/report | View/report | Yes | No | No |
+| View own progress | Full reports | Full reports | Assigned students | Yes | Linked children |
 
 ## Architecture
 
@@ -28,69 +50,27 @@ Node.js + Express Application Layer
         PostgreSQL
 ```
 
-The future Android application will be implemented separately using Kotlin + Jetpack Compose and will consume the same REST API.
+The Android application remains a separate Kotlin + Jetpack Compose client and will consume the same REST API without changing the backend architecture.
 
 ## Repository structure
 
 ```text
 Progress-Tracker/
-├── web/          React web application
+├── web/          React + Vite web application
 ├── backend/      Node.js + Express REST API
-├── android/      Kotlin + Jetpack Compose application (later stage)
 ├── docs/         Architecture and engineering documentation
+├── dev.cmd       Starts backend and web locally on Windows
 ├── .gitignore
 └── README.md
 ```
 
 ## Core roles
 
-- `ADMIN` — full administrative access.
-- `MANAGER` — student registration, dormitory/Halaqah placement, activities.
-- `TEACHER` — daily memorization-progress recording and supervised-student reports.
-- `STUDENT` — personal memorization progress.
-- `PARENT` — child progress.
-
-## Backend engineering approach
-
-The server uses a layered modular architecture:
-
-```text
-HTTP Request
-   ↓
-Route
-   ↓
-Controller
-   ↓
-Service / Business Rules
-   ↓
-Repository / Prisma
-   ↓
-PostgreSQL
-```
-
-Cross-cutting concerns such as authentication, authorization, validation, error handling, security headers, and logging are implemented through middleware.
-
-## Data model direction
-
-The design follows the project proposal and includes these core entities:
-
-- users
-- students
-- halaqahs
-- dormitory assignments
-- progress entries
-- schedule periods
-- activities
-
-The prototype begins with the user, Halaqah, dormitory, and Student relationships required for Admin account creation. Progress/reporting entities remain in the schema so later stages do not require a destructive redesign.
-
-## Git workflow
-
-```text
-feature/* → development → main
-```
-
-Work is implemented on feature branches, integrated and tested on `development`, and merged to `main` only after verification.
+- `ADMIN` — full administrative access and Home/Library/Media content management.
+- `MANAGER` — user registration for Teacher/Student/Parent, student assignment, parent links, Library and Media management, and reports.
+- `TEACHER` — assigned-student access and daily memorization-progress recording.
+- `STUDENT` — personal memorization progress and history.
+- `PARENT` — linked child progress and history.
 
 ## Local development
 
@@ -102,5 +82,29 @@ Requirements:
 - Git
 
 Never commit `.env` files. Copy the provided `.env.example` files to `.env` locally and replace development values as needed.
+
+After pulling schema changes, run from `backend`:
+
+```powershell
+npx.cmd prisma migrate dev --name full_system
+npx.cmd prisma generate
+npm.cmd run prisma:seed
+```
+
+To start backend and web together on Windows, run from the repository root:
+
+```powershell
+.\dev.cmd
+```
+
+The backend is served at `http://localhost:4000` and the web client at `http://localhost:5173`.
+
+## Build verification
+
+GitHub Actions runs backend and web build checks automatically on the feature, development, and main branches.
+
+```text
+feature/* → development → main
+```
 
 Implementation is currently taking place on `feature/prototype-foundation`.

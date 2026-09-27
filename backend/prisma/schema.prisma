@@ -16,36 +16,51 @@ enum Role {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  loginId      String   @unique @map("login_id")
-  fullName     String   @map("full_name")
-  passwordHash String   @map("password_hash")
-  role         Role
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                   String   @id @default(cuid())
+  loginId              String   @unique @map("login_id")
+  fullName             String   @map("full_name")
+  passwordHash         String   @map("password_hash")
+  credentialCiphertext String?  @map("credential_ciphertext")
+  role                 Role
+  email                String?  @unique
+  mobile               String?
+  address              String?
+  age                  Int?
+  joinedAt             DateTime? @db.Date @map("joined_at")
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
-  studentProfile     Student?           @relation("StudentUser")
-  taughtHalaqahs     Halaqah[]          @relation("HalaqahTeacher")
-  recordedProgress   ProgressEntry[]    @relation("ProgressTeacher")
-  parentLinks         ParentStudent[]    @relation("ParentUser")
-  createdActivities  Activity[]         @relation("ActivityAuthor")
+  studentProfile    Student?        @relation("StudentUser")
+  taughtHalaqahs    Halaqah[]       @relation("HalaqahTeacher")
+  recordedProgress  ProgressEntry[] @relation("ProgressTeacher")
+  parentLinks       ParentStudent[] @relation("ParentUser")
+  createdActivities Activity[]      @relation("ActivityAuthor")
+  requestedLeaves     LeaveRequest[] @relation("LeaveRequester")
+  reviewedLeaves      LeaveRequest[] @relation("LeaveReviewer")
+  authoredNotes       NoteViolation[] @relation("NoteAuthor")
+  receivedNotes       NoteViolation[] @relation("NoteSubject")
+  administeredTests   MonthlyTest[]   @relation("TestExaminer")
+  sentNotifications    Notification[]  @relation("NotificationSender")
+  receivedNotifications Notification[] @relation("NotificationRecipient")
 
   @@map("users")
 }
 
 model Student {
-  id         String   @id @default(cuid())
-  userId     String   @unique @map("user_id")
-  halaqahId  String   @map("halaqah_id")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  halaqahId       String   @map("halaqah_id")
+  memorizedAmount String?  @map("memorized_amount")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   user        User                  @relation("StudentUser", fields: [userId], references: [id], onDelete: Cascade)
   halaqah     Halaqah               @relation(fields: [halaqahId], references: [id])
   dormitory   DormitoryAssignment?
   progress    ProgressEntry[]
   parentLinks ParentStudent[]
+  monthlyTests MonthlyTest[]
 
   @@index([halaqahId])
   @@map("students")
@@ -60,6 +75,8 @@ model Halaqah {
 
   teacher User?     @relation("HalaqahTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
   students Student[]
+  notes NoteViolation[]
+  monthlyTests MonthlyTest[]
 
   @@index([teacherId])
   @@map("halaqahs")
@@ -107,19 +124,25 @@ model SchedulePeriod {
 }
 
 model ProgressEntry {
-  id          String   @id @default(cuid())
-  studentId   String   @map("student_id")
-  teacherId   String   @map("teacher_id")
-  periodId    String   @map("period_id")
-  surah       String
-  verseFrom   Int      @map("verse_from")
-  verseTo     Int      @map("verse_to")
-  pages       Decimal  @db.Decimal(5, 2)
-  rating      Int
-  recordDate  DateTime @db.Date @map("record_date")
-  note        String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id         String   @id @default(cuid())
+  studentId  String   @map("student_id")
+  teacherId  String   @map("teacher_id")
+  periodId   String   @map("period_id")
+  attended   Boolean  @default(true)
+  recordType String?  @map("record_type")
+  surah      String?
+  verseFrom  Int?     @map("verse_from")
+  endSurah   String?  @map("end_surah")
+  verseTo    Int?     @map("verse_to")
+  matnName   String?  @map("matn_name")
+  matnFrom   String?  @map("matn_from")
+  matnTo     String?  @map("matn_to")
+  pages      Decimal  @default(0) @db.Decimal(5, 2)
+  rating     Int?
+  recordDate DateTime @db.Date @map("record_date")
+  note       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   teacher User           @relation("ProgressTeacher", fields: [teacherId], references: [id])
@@ -134,13 +157,169 @@ model Activity {
   id        String   @id @default(cuid())
   title     String
   content   String
+  category  String   @default("نشاط")
+  imageUrl  String?  @map("image_url")
   authorId  String   @map("author_id")
   published Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  author User @relation("ActivityAuthor", fields: [authorId], references: [id])
+  author User            @relation("ActivityAuthor", fields: [authorId], references: [id])
+  assets ActivityAsset[]
 
   @@index([createdAt])
   @@map("activities")
+}
+
+model ActivityAsset {
+  id         String   @id @default(cuid())
+  activityId String   @map("activity_id")
+  kind       String
+  mimeType   String   @map("mime_type")
+  fileName   String   @map("file_name")
+  url        String
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([activityId, sortOrder])
+  @@map("activity_assets")
+}
+
+model HomePageContent {
+  id            String   @id @default("home")
+  eyebrow       String
+  heroTitle     String   @map("hero_title")
+  heroBody      String   @map("hero_body")
+  aboutTitle    String   @map("about_title")
+  aboutBody     String   @map("about_body")
+  feature1Title String   @map("feature1_title")
+  feature1Body  String   @map("feature1_body")
+  feature2Title String   @map("feature2_title")
+  feature2Body  String   @map("feature2_body")
+  feature3Title String   @map("feature3_title")
+  feature3Body  String   @map("feature3_body")
+  calloutTitle  String   @map("callout_title")
+  calloutBody   String   @map("callout_body")
+  footerPhone   String?  @map("footer_phone")
+  footerEmail   String?  @map("footer_email")
+  footerInstagram String? @map("footer_instagram")
+  footerFacebook  String? @map("footer_facebook")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("home_page_content")
+}
+
+model LibraryItem {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  type        String   @default("PDF")
+  url         String
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([createdAt])
+  @@map("library_items")
+}
+
+
+model LeaveRequest {
+  id           String   @id @default(cuid())
+  requesterId  String   @map("requester_id")
+  type         String
+  fromDate     DateTime @db.Date @map("from_date")
+  toDate       DateTime? @db.Date @map("to_date")
+  reason       String?
+  status       String   @default("PENDING")
+  reviewedById String?  @map("reviewed_by_id")
+  reviewNote   String?  @map("review_note")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  requester User  @relation("LeaveRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewer  User? @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([requesterId, createdAt])
+  @@index([status, createdAt])
+  @@map("leave_requests")
+}
+
+model NoteViolation {
+  id            String   @id @default(cuid())
+  subjectUserId String   @map("subject_user_id")
+  authorId      String   @map("author_id")
+  kind          String
+  context       String
+  halaqahId     String?  @map("halaqah_id")
+  content       String
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  subject User     @relation("NoteSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
+  author  User     @relation("NoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  halaqah Halaqah? @relation(fields: [halaqahId], references: [id], onDelete: SetNull)
+
+  @@index([subjectUserId, createdAt])
+  @@index([authorId, createdAt])
+  @@map("notes_violations")
+}
+
+model MonthlyTest {
+  id         String   @id @default(cuid())
+  studentId  String   @map("student_id")
+  examinerId String   @map("examiner_id")
+  halaqahId  String   @map("halaqah_id")
+  type       String
+  matnName   String?  @map("matn_name")
+  score      Int
+  note       String?
+  testDate   DateTime @db.Date @map("test_date")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  student  Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  examiner User    @relation("TestExaminer", fields: [examinerId], references: [id])
+  halaqah  Halaqah @relation(fields: [halaqahId], references: [id])
+  questions MonthlyTestQuestion[]
+
+  @@index([studentId, testDate])
+  @@index([halaqahId, testDate])
+  @@map("monthly_tests")
+}
+
+model MonthlyTestQuestion {
+  id             String   @id @default(cuid())
+  monthlyTestId  String   @map("monthly_test_id")
+  questionNumber Int      @map("question_number")
+  correct        Boolean
+  surah          String?
+  ayah           Int?
+  referenceText  String?  @map("reference_text")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  monthlyTest MonthlyTest @relation(fields: [monthlyTestId], references: [id], onDelete: Cascade)
+
+  @@unique([monthlyTestId, questionNumber])
+  @@map("monthly_test_questions")
+}
+
+
+model Notification {
+  id          String   @id @default(cuid())
+  recipientId String   @map("recipient_id")
+  senderId    String   @map("sender_id")
+  title       String
+  message     String
+  type        String   @default("TASK")
+  eventAt     DateTime? @map("event_at")
+  isRead      Boolean  @default(false) @map("is_read")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  recipient User @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender    User @relation("NotificationSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, isRead, createdAt])
+  @@index([senderId, createdAt])
+  @@map("notifications")
 }

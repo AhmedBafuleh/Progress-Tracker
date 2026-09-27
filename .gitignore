@@ -31,3 +31,6 @@ Thumbs.db
 .gradle/
 local.properties
 **/build/
+
+# User-uploaded local media
+backend/uploads/

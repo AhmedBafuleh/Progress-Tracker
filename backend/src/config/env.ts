@@ -8,6 +8,9 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(24),
   JWT_EXPIRES_IN: z.string().default('8h'),
   WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
+  PASSWORD_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'PASSWORD_ENCRYPTION_KEY must be exactly 64 hexadecimal characters'),
 });
 
 const parsed = envSchema.safeParse(process.env);
