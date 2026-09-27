@@ -23,6 +23,24 @@ function displayToIso(value: string) {
   return `${year}-${two(month)}-${two(day)}`;
 }
 
+function openNativePicker(input: HTMLInputElement | null) {
+  if (!input) return;
+  try {
+    input.showPicker?.();
+  } catch {
+    input.focus();
+    input.click();
+  }
+}
+
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v12H4V7a2 2 0 0 1 2-2Z" />
+    </svg>
+  );
+}
+
 export function DateField({
   value,
   onChange,
@@ -36,6 +54,7 @@ export function DateField({
 }) {
   const [display, setDisplay] = useState(() => isoToDisplay(value));
   const lastEmitted = useRef(value);
+  const pickerRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (value === lastEmitted.current) return;
@@ -44,29 +63,55 @@ export function DateField({
   }, [value]);
 
   return (
-    <input
-      dir="ltr"
-      inputMode="numeric"
-      autoComplete="off"
-      placeholder={placeholder}
-      value={display}
-      required={required}
-      maxLength={10}
-      pattern="\d{2}-\d{2}-(\d{2}|\d{4})"
-      title="DD-MM-YY"
-      onChange={(event) => {
-        const next = event.target.value.toUpperCase().replace(/[^0-9-]/g, '');
-        setDisplay(next);
-        if (!next) {
-          lastEmitted.current = '';
-          onChange('');
-          return;
-        }
-        const parsed = displayToIso(next);
-        lastEmitted.current = parsed ?? '';
-        onChange(parsed ?? '');
-      }}
-    />
+    <div className="date-field">
+      <input
+        className="date-field-text"
+        dir="ltr"
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder={placeholder}
+        value={display}
+        required={required}
+        maxLength={10}
+        pattern="\d{2}-\d{2}-(\d{2}|\d{4})"
+        title="DD-MM-YY"
+        onChange={(event) => {
+          const next = event.target.value.toUpperCase().replace(/[^0-9-]/g, '');
+          setDisplay(next);
+          if (!next) {
+            lastEmitted.current = '';
+            onChange('');
+            return;
+          }
+          const parsed = displayToIso(next);
+          lastEmitted.current = parsed ?? '';
+          onChange(parsed ?? '');
+        }}
+      />
+      <button
+        className="date-picker-button"
+        type="button"
+        aria-label="اختيار التاريخ من التقويم"
+        title="اختيار من التقويم"
+        onClick={() => openNativePicker(pickerRef.current)}
+      >
+        <CalendarIcon />
+      </button>
+      <input
+        ref={pickerRef}
+        className="native-date-picker"
+        type="date"
+        tabIndex={-1}
+        aria-hidden="true"
+        value={value || ''}
+        onChange={(event) => {
+          const next = event.target.value;
+          lastEmitted.current = next;
+          setDisplay(isoToDisplay(next));
+          onChange(next);
+        }}
+      />
+    </div>
   );
 }
 
@@ -97,6 +142,7 @@ export function DateTimeField({
 }) {
   const [display, setDisplay] = useState(() => isoDateTimeToDisplay(value));
   const lastEmitted = useRef(value);
+  const pickerRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (value === lastEmitted.current) return;
@@ -105,27 +151,53 @@ export function DateTimeField({
   }, [value]);
 
   return (
-    <input
-      dir="ltr"
-      inputMode="numeric"
-      autoComplete="off"
-      placeholder="DD-MM-YY HH:MM"
-      value={display}
-      maxLength={16}
-      pattern="\d{2}-\d{2}-(\d{2}|\d{4})\s\d{2}:\d{2}"
-      title="DD-MM-YY HH:MM"
-      onChange={(event) => {
-        const next = event.target.value.toUpperCase().replace(/[^0-9:\-\s]/g, '');
-        setDisplay(next);
-        if (!next) {
-          lastEmitted.current = '';
-          onChange('');
-          return;
-        }
-        const parsed = displayToLocalDateTime(next);
-        lastEmitted.current = parsed ?? '';
-        onChange(parsed ?? '');
-      }}
-    />
+    <div className="date-field">
+      <input
+        className="date-field-text"
+        dir="ltr"
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder="DD-MM-YY HH:MM"
+        value={display}
+        maxLength={16}
+        pattern="\d{2}-\d{2}-(\d{2}|\d{4})\s\d{2}:\d{2}"
+        title="DD-MM-YY HH:MM"
+        onChange={(event) => {
+          const next = event.target.value.toUpperCase().replace(/[^0-9:\-\s]/g, '');
+          setDisplay(next);
+          if (!next) {
+            lastEmitted.current = '';
+            onChange('');
+            return;
+          }
+          const parsed = displayToLocalDateTime(next);
+          lastEmitted.current = parsed ?? '';
+          onChange(parsed ?? '');
+        }}
+      />
+      <button
+        className="date-picker-button"
+        type="button"
+        aria-label="اختيار التاريخ والوقت من التقويم"
+        title="اختيار من التقويم"
+        onClick={() => openNativePicker(pickerRef.current)}
+      >
+        <CalendarIcon />
+      </button>
+      <input
+        ref={pickerRef}
+        className="native-date-picker"
+        type="datetime-local"
+        tabIndex={-1}
+        aria-hidden="true"
+        value={value || ''}
+        onChange={(event) => {
+          const next = event.target.value;
+          lastEmitted.current = next;
+          setDisplay(isoDateTimeToDisplay(next));
+          onChange(next);
+        }}
+      />
+    </div>
   );
 }
