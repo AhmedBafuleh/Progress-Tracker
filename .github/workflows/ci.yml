@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - feature/prototype-foundation
+      - feature/reporting-ai
       - development
       - main
   pull_request:
