@@ -639,3 +639,90 @@ input:focus, select:focus, textarea:focus {
 
 /* Date fields use a single visible DD-MM-YY convention */
 .inline-example { display: none !important; }
+
+
+/* Transparent logo treatment */
+.brand-logo {
+  background: transparent !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  object-fit: contain;
+}
+.admin-brand .brand-logo {
+  background: transparent !important;
+  padding: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.login-symbol {
+  width: 64px;
+  height: 64px;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0;
+  box-shadow: none;
+}
+.login-symbol .brand-logo {
+  width: 64px;
+  height: 64px;
+}
+.topbar .brand-logo,
+.admin-brand .brand-logo {
+  width: 52px;
+  height: 52px;
+}
+
+/* DD-MM-YY input with calendar picker */
+.date-field {
+  position: relative;
+  width: 100%;
+}
+.date-field-text {
+  width: 100%;
+  padding-right: 46px !important;
+  direction: ltr;
+}
+.date-picker-button {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #756c73;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease;
+}
+.date-picker-button:hover,
+.date-picker-button:focus-visible {
+  background: #f6eef5;
+  color: var(--brand-purple);
+}
+.date-picker-button svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.native-date-picker {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+  left: 12px;
+  bottom: 0;
+}
