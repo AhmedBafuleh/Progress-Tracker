@@ -314,8 +314,8 @@ export function AdminAiAssistantPanel() {
 
         {!configured && (
           <div className="ai-setup-box">
-            <strong>ميزة الذكاء الاصطناعي موجودة في النظام ولكنها تحتاج مفتاح API على جهازك.</strong>
-            <span>أضف <code>OPENAI_API_KEY</code> إلى <code>backend/.env</code>. لا تضع المفتاح في GitHub ولا ترسله في المحادثة.</span>
+            <strong>ميزة الذكاء الاصطناعي خاصة بالمؤسسة وتعمل من خادم محلي.</strong>
+            <span>شغّل Ollama على خادم الكلية وثبّت النموذج المحدد في <code>LOCAL_AI_MODEL</code>. التطبيق يتصل افتراضيًا بـ <code>http://127.0.0.1:11434</code> ولا يحتاج مفتاح API خارجيًا.</span>
           </div>
         )}
         {error && <div className="error-box">{error}</div>}
@@ -330,7 +330,7 @@ export function AdminAiAssistantPanel() {
 
         <div className="ai-quick-actions">
           <button type="button" className="primary-button" onClick={() => void analyze()} disabled={!configured || !userId || asking}><Icon name="sparkles" size={18} />{asking ? 'جارٍ التحليل...' : 'إنشاء تحليل شامل'}</button>
-          <span>سيستخدم المساعد فقط السجلات المتاحة في النظام للفترة المختارة.</span>
+          <span>سيستخدم المساعد فقط السجلات المتاحة في النظام للفترة المختارة، ويعالجها على خادم الذكاء الاصطناعي المحلي.</span>
         </div>
       </section>
 
