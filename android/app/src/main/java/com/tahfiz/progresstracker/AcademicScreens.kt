@@ -640,18 +640,90 @@ fun NotificationsScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
     }
 
     if (showCreate) {
-        val students = state.users.filter { it.role == "STUDENT" && it.isActive }
-        var recipient by remember { mutableStateOf(students.firstOrNull()?.id.orEmpty()) }
+        val students = state.students.filter { it.user.isActive }
+        val halaqahs = students
+            .map { it.halaqah }
+            .distinctBy { it.id }
+            .sortedBy { it.name }
+
+        var targetType by remember { mutableStateOf("STUDENT") }
+        var halaqahId by remember { mutableStateOf(halaqahs.firstOrNull()?.id.orEmpty()) }
+        var recipientUserId by remember { mutableStateOf(students.firstOrNull()?.user?.id.orEmpty()) }
         var type by remember { mutableStateOf("TASK") }
         var title by remember { mutableStateOf("") }
         var message by remember { mutableStateOf("") }
         var eventAt by remember { mutableStateOf("") }
+
+        val selectedHalaqah = halaqahs.firstOrNull { it.id == halaqahId }
+        val selectedStudent = students.firstOrNull { it.user.id == recipientUserId }
+        val recipientCount = when (targetType) {
+            "ALL" -> students.size
+            "HALAQAH" -> students.count { it.halaqah.id == halaqahId }
+            else -> if (selectedStudent != null) 1 else 0
+        }
+
         AlertDialog(
             onDismissRequest = { showCreate = false },
             title = { Text("إرسال إشعار") },
             text = {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    item { SelectionField("الطالب", students.firstOrNull { it.id == recipient }?.fullName.orEmpty(), students.map { it.id to it.fullName }, { recipient = it }) }
+                    item {
+                        SelectionField(
+                            "الإرسال إلى",
+                            when (targetType) {
+                                "ALL" -> "جميع الطلاب"
+                                "HALAQAH" -> "حلقة محددة"
+                                else -> "طالب محدد"
+                            },
+                            listOf(
+                                "ALL" to "جميع الطلاب",
+                                "HALAQAH" to "حلقة محددة",
+                                "STUDENT" to "طالب محدد",
+                            ),
+                            { targetType = it },
+                        )
+                    }
+
+                    if (targetType == "HALAQAH") {
+                        item {
+                            SelectionField(
+                                "الحلقة",
+                                selectedHalaqah?.name.orEmpty(),
+                                halaqahs.map { it.id to it.name },
+                                { halaqahId = it },
+                            )
+                        }
+                    }
+
+                    if (targetType == "STUDENT") {
+                        item {
+                            SelectionField(
+                                "الطالب",
+                                selectedStudent?.let { "${it.user.fullName} — ${it.halaqah.name}" }.orEmpty(),
+                                students.map { it.user.id to "${it.user.fullName} — ${it.halaqah.name}" },
+                                { recipientUserId = it },
+                            )
+                        }
+                    }
+
+                    item {
+                        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("المستلمون", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                                Text(
+                                    "$recipientCount ${if (recipientCount == 1) "طالب" else "طلاب"}",
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                if (targetType == "HALAQAH" && selectedHalaqah != null) {
+                                    Text(selectedHalaqah.name, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+                                }
+                                if (targetType == "STUDENT" && selectedStudent != null) {
+                                    Text(selectedStudent.user.fullName, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+
                     item { SelectionField("النوع", statusLabel(type), listOf("TASK" to "مهمة", "ACTIVITY" to "نشاط", "REMINDER" to "تذكير"), { type = it }) }
                     item { OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("العنوان") }) }
                     item { OutlinedTextField(message, { message = it }, Modifier.fillMaxWidth(), label = { Text("التفاصيل") }, minLines = 3) }
@@ -660,7 +732,7 @@ fun NotificationsScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
             },
             confirmButton = {
                 TextButton(
-                    enabled = recipient.isNotBlank() && title.length >= 2 && message.length >= 3,
+                    enabled = recipientCount > 0 && title.length >= 2 && message.length >= 3,
                     onClick = {
                         val normalizedEvent = eventAt.trim().let { value ->
                             when {
@@ -671,7 +743,17 @@ fun NotificationsScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                                 else -> value
                             }
                         }
-                        viewModel.createNotification(CreateNotificationRequest(recipient, title.trim(), message.trim(), type, normalizedEvent))
+                        viewModel.createNotification(
+                            CreateNotificationRequest(
+                                targetType = targetType,
+                                recipientUserId = recipientUserId.takeIf { targetType == "STUDENT" },
+                                halaqahId = halaqahId.takeIf { targetType == "HALAQAH" },
+                                title = title.trim(),
+                                message = message.trim(),
+                                type = type,
+                                eventAt = normalizedEvent,
+                            ),
+                        )
                         showCreate = false
                     },
                 ) { Text("إرسال") }
