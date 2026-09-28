@@ -316,13 +316,19 @@ data class NotificationDto(
 
 data class NotificationsResponse(val notifications: List<NotificationDto>, val unreadCount: Int = 0)
 data class CreateNotificationRequest(
-    val recipientUserId: String,
+    val targetType: String = "STUDENT",
+    val recipientUserId: String? = null,
+    val halaqahId: String? = null,
     val title: String,
     val message: String,
     val type: String = "TASK",
     val eventAt: String? = null,
 )
-data class NotificationMutationResponse(val notification: NotificationDto? = null, val message: String)
+data class NotificationMutationResponse(
+    val notification: NotificationDto? = null,
+    val recipientCount: Int = 0,
+    val message: String,
+)
 
 // ---------- Library / media / home ----------
 
