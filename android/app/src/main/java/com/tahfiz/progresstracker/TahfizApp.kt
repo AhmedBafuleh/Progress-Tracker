@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -321,28 +323,35 @@ private fun AuthenticatedApp(
 
                     Spacer(Modifier.height(4.dp))
 
-                    sections.forEach { section ->
-                        NavigationDrawerItem(
-                            label = { Text(section.label, fontWeight = if (selected == section) FontWeight.Bold else FontWeight.Medium) },
-                            icon = { Icon(section.icon, contentDescription = null) },
-                            selected = selected == section,
-                            onClick = {
-                                selected = section
-                                scope.launch { drawerState.close() }
-                            },
-                            colors = NavigationDrawerItemDefaults.colors(
-                                selectedContainerColor = BrandPurple.copy(alpha = .9f),
-                                selectedIconColor = Color.White,
-                                selectedTextColor = Color.White,
-                                unselectedContainerColor = Color.Transparent,
-                                unselectedIconColor = Color.White.copy(alpha = .72f),
-                                unselectedTextColor = Color.White.copy(alpha = .82f),
-                            ),
-                            shape = RoundedCornerShape(14.dp),
-                        )
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        contentPadding = PaddingValues(vertical = 4.dp),
+                    ) {
+                        items(sections, key = { it.name }) { section ->
+                            NavigationDrawerItem(
+                                label = { Text(section.label, fontWeight = if (selected == section) FontWeight.Bold else FontWeight.Medium) },
+                                icon = { Icon(section.icon, contentDescription = null) },
+                                selected = selected == section,
+                                onClick = {
+                                    selected = section
+                                    scope.launch { drawerState.close() }
+                                },
+                                colors = NavigationDrawerItemDefaults.colors(
+                                    selectedContainerColor = BrandPurple.copy(alpha = .9f),
+                                    selectedIconColor = Color.White,
+                                    selectedTextColor = Color.White,
+                                    unselectedContainerColor = Color.Transparent,
+                                    unselectedIconColor = Color.White.copy(alpha = .72f),
+                                    unselectedTextColor = Color.White.copy(alpha = .82f),
+                                ),
+                                shape = RoundedCornerShape(14.dp),
+                            )
+                        }
                     }
 
-                    Spacer(Modifier.weight(1f))
                     Divider(color = Color.White.copy(alpha = .12f))
                     NavigationDrawerItem(
                         label = { Text("تسجيل الخروج") },
