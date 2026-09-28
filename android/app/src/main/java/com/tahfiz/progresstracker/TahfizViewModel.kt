@@ -32,6 +32,8 @@ data class TahfizUiState(
     val unreadCount: Int = 0,
     val library: List<LibraryItemDto> = emptyList(),
     val media: List<ActivityDto> = emptyList(),
+    val publicLibrary: List<LibraryItemDto> = emptyList(),
+    val publicMedia: List<ActivityDto> = emptyList(),
     val home: HomeContentDto? = null,
     val reportStudents: List<ReportStudentDto> = emptyList(),
     val selectedReport: StudentPerformanceReportDto? = null,
@@ -52,6 +54,7 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         ApiClient.configure(_state.value.serverUrl)
+        loadPublicContent()
         restoreSession()
     }
 
@@ -61,6 +64,7 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
             val normalized = ApiClient.baseUrl()
             prefs.edit().putString("server_url", normalized).apply()
             _state.value = _state.value.copy(serverUrl = normalized, message = "تم حفظ عنوان الخادم")
+            loadPublicContent(showLoading = true)
         }.onFailure {
             _state.value = _state.value.copy(error = "عنوان الخادم غير صالح")
         }
@@ -115,9 +119,12 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
     fun logout() {
         clearSession(keepServer = true)
         _state.value = TahfizUiState(serverUrl = ApiClient.baseUrl())
+        loadPublicContent(showLoading = true)
     }
 
     fun refresh() = loadDashboard()
+
+    fun refreshPublic() = loadPublicContent(showLoading = true)
 
     fun clearFeedback() {
         _state.value = _state.value.copy(error = null, message = null)
@@ -125,6 +132,34 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
 
     fun clearCredential() {
         _state.value = _state.value.copy(credentialReveal = null)
+    }
+
+    private fun loadPublicContent(showLoading: Boolean = false) {
+        if (showLoading) {
+            _state.value = _state.value.copy(loading = true, error = null)
+        }
+        viewModelScope.launch {
+            runCatching {
+                val home = async { ApiClient.api.home().home }
+                val library = async { ApiClient.api.publicLibrary().items }
+                val media = async { ApiClient.api.publicMedia().activities }
+                Triple(home.await(), library.await(), media.await())
+            }.onSuccess { (home, library, media) ->
+                _state.value = _state.value.copy(
+                    loading = if (showLoading) false else _state.value.loading,
+                    home = home,
+                    publicLibrary = library,
+                    publicMedia = media,
+                )
+            }.onFailure {
+                if (_state.value.user == null) {
+                    _state.value = _state.value.copy(
+                        loading = false,
+                        error = ApiClient.friendlyError(it, "تعذر تحميل الموقع العام"),
+                    )
+                }
+            }
+        }
     }
 
     private fun loadDashboard() {
