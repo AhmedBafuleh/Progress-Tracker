@@ -541,7 +541,7 @@ export const api = {
   listNotifications: () =>
     request<{ notifications: StudentNotification[]; unreadCount: number }>('/notifications'),
   createNotification: (payload: Record<string, unknown>) =>
-    request<{ notification: StudentNotification; message: string }>('/notifications', {
+    request<{ recipientCount: number; message: string }>('/notifications', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
