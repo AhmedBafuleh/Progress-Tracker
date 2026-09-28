@@ -11,11 +11,28 @@ router.use(requireAuth);
 const idSchema = z.string().cuid();
 
 const notificationSchema = z.object({
-  recipientUserId: z.string().cuid(),
+  targetType: z.enum(['ALL', 'HALAQAH', 'STUDENT']).default('STUDENT'),
+  recipientUserId: z.string().cuid().optional(),
+  halaqahId: z.string().cuid().optional(),
   title: z.string().trim().min(2).max(180),
   message: z.string().trim().min(3).max(2000),
   type: z.enum(['TASK', 'ACTIVITY', 'REMINDER']).default('TASK'),
   eventAt: z.string().datetime().optional().nullable(),
+}).superRefine((value, context) => {
+  if (value.targetType === 'STUDENT' && !value.recipientUserId) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['recipientUserId'],
+      message: 'يجب تحديد الطالب',
+    });
+  }
+  if (value.targetType === 'HALAQAH' && !value.halaqahId) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['halaqahId'],
+      message: 'يجب تحديد الحلقة',
+    });
+  }
 });
 
 router.get('/', async (req, res, next) => {
@@ -55,28 +72,52 @@ router.get('/', async (req, res, next) => {
 router.post('/', requireRole(Role.ADMIN, Role.MANAGER), async (req, res, next) => {
   try {
     const input = notificationSchema.parse(req.body);
-    const student = await prisma.user.findFirst({
-      where: { id: input.recipientUserId, role: Role.STUDENT, isActive: true },
-      select: { id: true },
-    });
-    if (!student) throw new AppError('الطالب المحدد غير موجود أو غير نشط', 400, 'INVALID_STUDENT');
 
-    const notification = await prisma.notification.create({
-      data: {
-        recipientId: student.id,
+    const recipients = await prisma.user.findMany({
+      where: {
+        role: Role.STUDENT,
+        isActive: true,
+        ...(input.targetType === 'STUDENT'
+          ? { id: input.recipientUserId }
+          : input.targetType === 'HALAQAH'
+            ? { studentProfile: { halaqahId: input.halaqahId } }
+            : {}),
+      },
+      select: { id: true },
+      orderBy: { fullName: 'asc' },
+    });
+
+    if (recipients.length === 0) {
+      const message = input.targetType === 'HALAQAH'
+        ? 'لا يوجد طلاب نشطون في الحلقة المحددة'
+        : input.targetType === 'ALL'
+          ? 'لا يوجد طلاب نشطون لإرسال الإشعار'
+          : 'الطالب المحدد غير موجود أو غير نشط';
+      throw new AppError(message, 400, 'NO_NOTIFICATION_RECIPIENTS');
+    }
+
+    const eventAt = input.eventAt ? new Date(input.eventAt) : null;
+    await prisma.notification.createMany({
+      data: recipients.map((recipient) => ({
+        recipientId: recipient.id,
         senderId: req.authUser!.id,
         title: input.title,
         message: input.message,
         type: input.type,
-        eventAt: input.eventAt ? new Date(input.eventAt) : null,
-      },
-      include: {
-        recipient: { select: { id: true, loginId: true, fullName: true, role: true } },
-        sender: { select: { id: true, fullName: true, role: true } },
-      },
+        eventAt,
+      })),
     });
 
-    res.status(201).json({ notification, message: 'تم إرسال الإشعار للطالب' });
+    const message = input.targetType === 'ALL'
+      ? `تم إرسال الإشعار إلى جميع الطلاب (${recipients.length})`
+      : input.targetType === 'HALAQAH'
+        ? `تم إرسال الإشعار إلى طلاب الحلقة (${recipients.length})`
+        : 'تم إرسال الإشعار للطالب';
+
+    res.status(201).json({
+      recipientCount: recipients.length,
+      message,
+    });
   } catch (error) {
     next(error);
   }
