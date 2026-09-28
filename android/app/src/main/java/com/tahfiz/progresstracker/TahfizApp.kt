@@ -2,6 +2,7 @@ package com.tahfiz.progresstracker
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,6 +82,8 @@ import kotlinx.coroutines.launch
 fun TahfizApp(viewModel: TahfizViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var publicMode by remember { mutableStateOf(false) }
+    var publicPage by remember { mutableStateOf(PublicPage.HOME) }
 
     LaunchedEffect(state.error, state.message) {
         val text = state.error ?: state.message
@@ -90,21 +93,43 @@ fun TahfizApp(viewModel: TahfizViewModel = viewModel()) {
         }
     }
 
+    LaunchedEffect(state.user?.id) {
+        if (state.user != null && publicPage == PublicPage.LOGIN) {
+            publicMode = false
+            publicPage = PublicPage.HOME
+        }
+        if (state.user == null) {
+            publicMode = false
+            if (publicPage != PublicPage.LOGIN) publicPage = PublicPage.HOME
+        }
+    }
+
     MaterialTheme(colorScheme = TahfizColors) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                if (state.user == null) {
-                    LoginScreen(
+                if (state.user == null || publicMode) {
+                    PublicSiteApp(
                         state = state,
+                        viewModel = viewModel,
+                        page = publicPage,
+                        onPageChange = { publicPage = it },
+                        onOpenDashboard = {
+                            if (state.user != null) {
+                                publicMode = false
+                                publicPage = PublicPage.HOME
+                            }
+                        },
                         snackbarHostState = snackbarHostState,
-                        onLogin = viewModel::login,
-                        onServerUrlChanged = viewModel::setServerUrl,
                     )
                 } else {
                     AuthenticatedApp(
                         state = state,
                         viewModel = viewModel,
                         snackbarHostState = snackbarHostState,
+                        onOpenPublicSite = {
+                            publicPage = PublicPage.HOME
+                            publicMode = true
+                        },
                     )
                 }
             }
@@ -269,6 +294,7 @@ private fun AuthenticatedApp(
     state: TahfizUiState,
     viewModel: TahfizViewModel,
     snackbarHostState: SnackbarHostState,
+    onOpenPublicSite: () -> Unit,
 ) {
     val user = state.user ?: return
     val sections = remember(user.role) { sectionsForRole(user.role) }
@@ -292,7 +318,12 @@ private fun AuthenticatedApp(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onOpenPublicSite()
+                                scope.launch { drawerState.close() }
+                            },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
@@ -322,6 +353,22 @@ private fun AuthenticatedApp(
                     }
 
                     Spacer(Modifier.height(4.dp))
+
+                    NavigationDrawerItem(
+                        label = { Text("الموقع العام", fontWeight = FontWeight.SemiBold) },
+                        icon = { Icon(Icons.Outlined.Home, contentDescription = null) },
+                        selected = false,
+                        onClick = {
+                            onOpenPublicSite()
+                            scope.launch { drawerState.close() }
+                        },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color.White.copy(alpha = .06f),
+                            unselectedIconColor = BrandGold,
+                            unselectedTextColor = Color.White,
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                    )
 
                     LazyColumn(
                         modifier = Modifier
