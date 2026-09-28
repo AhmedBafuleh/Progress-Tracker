@@ -164,7 +164,15 @@ export function HalaqahReportPanel({ halaqahs }: { halaqahs: Halaqah[] }) {
 export function NotificationManagerPanel({ user }: { user: SessionUser }) {
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [sent, setSent] = useState<StudentNotification[]>([]);
-  const [form, setForm] = useState({ halaqahId: '', recipientUserId: '', type: 'TASK', title: '', message: '', eventAt: '' });
+  const [form, setForm] = useState({
+    targetType: 'STUDENT' as 'ALL' | 'HALAQAH' | 'STUDENT',
+    halaqahId: '',
+    recipientUserId: '',
+    type: 'TASK',
+    title: '',
+    message: '',
+    eventAt: '',
+  });
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
@@ -191,18 +199,23 @@ export function NotificationManagerPanel({ user }: { user: SessionUser }) {
     students.forEach((student) => map.set(student.halaqah.id, student.halaqah.name));
     return [...map.entries()].map(([id, name]) => ({ id, name }));
   }, [students]);
-  const filteredStudents = students.filter((student) => student.halaqah.id === form.halaqahId);
 
-  function chooseHalaqah(halaqahId: string) {
-    const first = students.find((student) => student.halaqah.id === halaqahId);
-    setForm((current) => ({ ...current, halaqahId, recipientUserId: first?.user.id || '' }));
-  }
+  const filteredStudents = students.filter((student) => student.halaqah.id === form.halaqahId);
+  const selectedStudent = students.find((student) => student.user.id === form.recipientUserId);
+
+  const recipientCount = form.targetType === 'ALL'
+    ? students.length
+    : form.targetType === 'HALAQAH'
+      ? filteredStudents.length
+      : selectedStudent ? 1 : 0;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     try {
       const result = await api.createNotification({
-        recipientUserId: form.recipientUserId,
+        targetType: form.targetType,
+        ...(form.targetType === 'HALAQAH' ? { halaqahId: form.halaqahId } : {}),
+        ...(form.targetType === 'STUDENT' ? { recipientUserId: form.recipientUserId } : {}),
         title: form.title,
         message: form.message,
         type: form.type,
@@ -219,18 +232,51 @@ export function NotificationManagerPanel({ user }: { user: SessionUser }) {
 
   return <>
     <section className="admin-panel">
-      <div className="panel-heading"><div><span>إشعارات الطلاب</span><h2>إرسال مهمة أو نشاط</h2></div><p>{user.role === 'ADMIN' ? 'يمكن للمدير إرسال إشعار لأي طالب.' : 'يمكن للمشرف إرسال إشعار للطلاب.'}</p></div>
+      <div className="panel-heading">
+        <div><span>إشعارات الطلاب</span><h2>إرسال مهمة أو نشاط</h2></div>
+        <p>اختر الإرسال لجميع الطلاب، أو لحلقة محددة، أو لطالب محدد بالاسم.</p>
+      </div>
       {notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
       {students.length ? <form className="user-form" onSubmit={submit}>
-        <label>الحلقة<select value={form.halaqahId} onChange={(e) => chooseHalaqah(e.target.value)}>{halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
-        <label>الطالب<select value={form.recipientUserId} onChange={(e) => setForm({ ...form, recipientUserId: e.target.value })}>{filteredStudents.map((s) => <option key={s.id} value={s.user.id}>{s.user.fullName}</option>)}</select></label>
+        <label>الإرسال إلى
+          <select value={form.targetType} onChange={(e) => setForm({ ...form, targetType: e.target.value as 'ALL' | 'HALAQAH' | 'STUDENT' })}>
+            <option value="ALL">جميع الطلاب</option>
+            <option value="HALAQAH">حلقة محددة</option>
+            <option value="STUDENT">طالب محدد</option>
+          </select>
+        </label>
+
+        {form.targetType === 'HALAQAH' && <label>الحلقة
+          <select value={form.halaqahId} onChange={(e) => setForm({ ...form, halaqahId: e.target.value })}>
+            {halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+          </select>
+        </label>}
+
+        {form.targetType === 'STUDENT' && <label>الطالب
+          <select value={form.recipientUserId} onChange={(e) => setForm({ ...form, recipientUserId: e.target.value })}>
+            {students.map((student) => <option key={student.id} value={student.user.id}>{student.user.fullName} — {student.halaqah.name}</option>)}
+          </select>
+        </label>}
+
         <label>النوع<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="TASK">مهمة</option><option value="ACTIVITY">نشاط</option><option value="REMINDER">تذكير</option></select></label>
         <label>التاريخ والوقت - اختياري<DateTimeField value={form.eventAt} onChange={(value) => setForm({ ...form, eventAt: value })} /></label>
         <label className="span-2">العنوان<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
         <label className="span-2">التفاصيل<textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required /></label>
-        <div className="form-actions"><button className="primary-button"><Icon name="bell" size={18} />إرسال الإشعار</button></div>
+
+        <div className="span-2 report-summary-line">
+          المستلمون: <strong>{recipientCount}</strong> {recipientCount === 1 ? 'طالب' : 'طلاب'}
+          {form.targetType === 'HALAQAH' && form.halaqahId ? ' • ' + (halaqahs.find((h) => h.id === form.halaqahId)?.name || '') : ''}
+          {form.targetType === 'STUDENT' && selectedStudent ? ' • ' + selectedStudent.user.fullName : ''}
+        </div>
+
+        <div className="form-actions">
+          <button className="primary-button" disabled={recipientCount === 0}>
+            <Icon name="bell" size={18} />إرسال الإشعار
+          </button>
+        </div>
       </form> : <div className="empty-state"><strong>لا يوجد طلاب متاحون</strong></div>}
     </section>
+
     <section className="admin-panel">
       <div className="panel-heading"><div><span>السجل</span><h2>الإشعارات المرسلة</h2></div></div>
       <div className="item-list">{sent.map((item) => <div className="item-row" key={item.id}><div className="notification-icon"><Icon name="bell" /></div><div className="item-main"><strong>{item.title}</strong><span>{item.recipient?.fullName || 'طالب'} • {item.message}</span><span>{item.eventAt ? new Date(item.eventAt).toLocaleString('ar-SA') : new Date(item.createdAt).toLocaleString('ar-SA')}</span></div></div>)}</div>
