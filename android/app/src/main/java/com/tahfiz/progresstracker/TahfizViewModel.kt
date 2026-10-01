@@ -479,8 +479,9 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
         fileName: String,
         title: String,
         description: String?,
+        type: String,
         published: Boolean,
-    ) = mutate("تعذر رفع ملف المكتبة") {
+    ) = mutate("تعذر إضافة ملف المكتبة") {
         val upload = ApiClient.api.uploadLibraryFile(
             mimeType,
             ApiClient.encodedFileName(fileName),
@@ -490,7 +491,7 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
             LibraryItemRequest(
                 title = title,
                 description = description,
-                type = upload.file.type,
+                type = type,
                 url = upload.file.url,
                 published = published,
             ),
