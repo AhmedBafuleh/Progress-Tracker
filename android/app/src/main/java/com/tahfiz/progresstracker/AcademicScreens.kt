@@ -482,14 +482,16 @@ private fun MonthlyTestDialog(
             TextButton(
                 enabled = studentId.isNotBlank() && selectedStudent != null &&
                     questions.isNotEmpty() &&
-                    (type == "MATN"
-                        ? matnName.isNotBlank() && questions.all { it.reference.isNotBlank() }
-                        : questions.all {
+                    (if (type == "MATN") {
+                        matnName.isNotBlank() && questions.all { it.reference.isNotBlank() }
+                    } else {
+                        questions.all {
                             val max = ayahCountForSurah(it.surah)
                             val fromValue = it.ayah.toIntOrNull()
                             val toValue = it.ayahTo.toIntOrNull()
                             max > 0 && fromValue != null && toValue != null && fromValue in 1..max && toValue in fromValue..max
-                        }),
+                        }
+                    }),
                 onClick = {
                     val student = selectedStudent ?: return@TextButton
                     onSubmit(
