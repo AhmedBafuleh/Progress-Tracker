@@ -23,19 +23,20 @@ const addDays = (value: string, days: number) => {
 };
 
 function SurahInput({ value, onChange, required = false, placeholder }: { value: string; onChange: (value: string) => void; required?: boolean; placeholder?: string }) {
-  return <>
-    <input
-      list="quran-surah-options"
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      required={required}
-      placeholder={placeholder}
-      autoComplete="off"
-    />
-    <datalist id="quran-surah-options">
-      {QURAN_SURAHS.map((surah) => <option key={surah.number} value={surah.name}>{surah.number}. {surah.name}</option>)}
-    </datalist>
-  </>;
+  return <input
+    list="quran-surah-options"
+    value={value}
+    onChange={(event) => onChange(event.target.value)}
+    required={required}
+    placeholder={placeholder}
+    autoComplete="off"
+  />;
+}
+
+function QuranSurahOptions() {
+  return <datalist id="quran-surah-options">
+    {QURAN_SURAHS.map((surah) => <option key={surah.number} value={surah.name}>{surah.number}. {surah.name}</option>)}
+  </datalist>;
 }
 const messageOf = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
 
@@ -46,7 +47,7 @@ export function DailyProgressRecorder({ user, onSaved }: { user: SessionUser; on
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ halaqahId: '', studentId: '', periodId: '', attended: true, recordType: 'HIFZ', surah: '', verseFrom: 1, endSurah: '', verseTo: 1, matnName: '', matnFrom: '', matnTo: '', pages: 1, rating: 5, recordDate: today(), note: '' });
+  const [form, setForm] = useState({ halaqahId: '', studentId: '', periodId: '', attended: true, recordType: 'HIFZ', surah: 'الفاتحة', verseFrom: 1, endSurah: '', verseTo: 1, matnName: '', matnFrom: '', matnTo: '', pages: 1, rating: 5, recordDate: today(), note: '' });
 
   useEffect(() => {
     void Promise.all([api.listProgressStudents(), api.listPeriods()])
@@ -82,13 +83,14 @@ export function DailyProgressRecorder({ user, onSaved }: { user: SessionUser; on
       }
       const result = await api.createProgress(payload);
       setNotice(result.message); onSaved?.(result.message);
-      setForm((current) => ({ ...current, attended: true, recordType: 'HIFZ', surah: '', verseFrom: 1, endSurah: '', verseTo: 1, matnName: '', matnFrom: '', matnTo: '', pages: 1, rating: 5, note: '' }));
+      setForm((current) => ({ ...current, attended: true, recordType: 'HIFZ', surah: 'الفاتحة', verseFrom: 1, endSurah: '', verseTo: 1, matnName: '', matnFrom: '', matnTo: '', pages: 1, rating: 5, note: '' }));
     } catch (err) { setError(messageOf(err, 'تعذر حفظ متابعة الطالب')); }
     finally { setSaving(false); }
   }
 
   if (loading) return <div className="loading-panel">جارٍ تحميل بيانات المتابعة...</div>;
   return <section className="admin-panel">
+    <QuranSurahOptions />
     <div className="panel-heading"><div><span>{user.role === 'ADMIN' ? 'متابعة جميع الطلاب' : 'الحلقات المسندة إليك'}</span><h2>تسجيل المتابعة اليومية</h2></div><p>اختر الحلقة أولًا ثم الطالب وسجّل الحضور ونوع المتابعة.</p></div>
     {notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
     {students.length === 0 ? <div className="empty-state"><strong>لا يوجد طلاب متاحون للتسجيل</strong></div> : <form className="record-form" onSubmit={submit}>
@@ -287,6 +289,7 @@ export function MonthlyTestsPanel({ user }: { user: SessionUser }) {
   function removeQuestion(index: number) { setQuestions((current) => current.filter((_, i) => i !== index).map((q, i) => ({ ...q, questionNumber: i + 1 }))); }
   async function submit(event: FormEvent) { event.preventDefault(); try { const result = await api.createMonthlyTest({ ...form, questions }); setNotice(result.message); setQuestions([{ questionNumber: 1, correct: true, surah: 'الفاتحة', ayah: 1, ayahTo: 1, referenceText: '' }]); setForm((current) => ({ ...current, note: '', matnName: '' })); await refresh(); } catch (err) { setError(messageOf(err, 'تعذر حفظ الاختبار')); } }
   return <>
+    <QuranSurahOptions />
     <section className="admin-panel"><div className="panel-heading"><div><span>التقييم الشهري</span><h2>اختبار شهري جديد</h2></div><div className="test-score-preview"><strong>{scorePreview}</strong><span>/100</span></div></div>{notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
       {students.length ? <form onSubmit={submit}><div className="record-row monthly-test-header"><label>الحلقة<select value={form.halaqahId} onChange={(e) => chooseHalaqah(e.target.value)}>{halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label><label>الطالب<select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>{filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.user.fullName}</option>)}</select></label><label>نوع الاختبار<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="HIFZ">حفظ</option><option value="REVIEW">مراجعة</option><option value="MATN">متن</option></select></label><label>التاريخ<DateField value={form.testDate} onChange={(value) => setForm({ ...form, testDate: value })} required /></label></div>
         {form.type === 'MATN' && <label className="standalone-field">اسم المتن<input value={form.matnName} onChange={(e) => setForm({ ...form, matnName: e.target.value })} required /></label>}
