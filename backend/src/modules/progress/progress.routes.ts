@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../../config/prisma.js';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { AppError } from '../../shared/AppError.js';
+import { assertAyahInSurah, findSurah } from '../../shared/quran.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -47,8 +48,23 @@ function validateProgressInput(input: z.infer<typeof progressSchema>) {
     throw new AppError('يجب تحديد السورة وبداية ونهاية الآيات', 400, 'QURAN_RANGE_REQUIRED');
   }
 
-  const endSurah = input.endSurah || input.surah;
-  if (endSurah === input.surah && input.verseTo < input.verseFrom) {
+  const startSurah = findSurah(input.surah);
+  const endSurah = findSurah(input.endSurah || input.surah);
+  if (!startSurah || !endSurah) {
+    throw new AppError('يجب اختيار سورة صحيحة من قائمة سور القرآن', 400, 'INVALID_SURAH');
+  }
+
+  try {
+    assertAyahInSurah(startSurah.name, input.verseFrom, 'الآية الأولى');
+    assertAyahInSurah(endSurah.name, input.verseTo, 'الآية الأخيرة');
+  } catch (error) {
+    throw new AppError(error instanceof Error ? error.message : 'رقم الآية غير صالح', 400, 'INVALID_AYAH');
+  }
+
+  if (endSurah.number < startSurah.number) {
+    throw new AppError('سورة النهاية يجب ألا تسبق سورة البداية', 400, 'INVALID_SURAH_RANGE');
+  }
+  if (endSurah.number === startSurah.number && input.verseTo < input.verseFrom) {
     throw new AppError('رقم الآية الأخيرة يجب أن يكون أكبر من أو يساوي الآية الأولى', 400, 'INVALID_VERSE_RANGE');
   }
 }

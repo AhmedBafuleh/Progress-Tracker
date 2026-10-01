@@ -49,9 +49,9 @@ fun ProgressRecorderScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
     var periodId by remember(state.periods) { mutableStateOf(state.periods.firstOrNull()?.id.orEmpty()) }
     var attended by remember { mutableStateOf(true) }
     var recordType by remember { mutableStateOf("HIFZ") }
-    var surah by remember { mutableStateOf("") }
+    var surah by remember { mutableStateOf("الفاتحة") }
     var verseFrom by remember { mutableStateOf("1") }
-    var endSurah by remember { mutableStateOf("") }
+    var endSurah by remember { mutableStateOf("الفاتحة") }
     var verseTo by remember { mutableStateOf("1") }
     var matnName by remember { mutableStateOf("") }
     var matnFrom by remember { mutableStateOf("") }
@@ -130,15 +130,55 @@ fun ProgressRecorderScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                 }
             } else {
                 item {
+                    val maxAyah = ayahCountForSurah(surah)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(surah, { surah = it }, Modifier.weight(1f), label = { Text("السورة") })
-                        OutlinedTextField(verseFrom, { verseFrom = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("من آية") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                        SelectionField(
+                            "السورة",
+                            surah,
+                            quranSurahOptions(),
+                            {
+                                surah = it
+                                val max = ayahCountForSurah(it)
+                                verseFrom = (verseFrom.toIntOrNull() ?: 1).coerceIn(1, max).toString()
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            verseFrom,
+                            { value ->
+                                val digits = value.filter(Char::isDigit)
+                                verseFrom = if (digits.isBlank()) "" else (digits.toIntOrNull() ?: 1).coerceIn(1, maxAyah).toString()
+                            },
+                            Modifier.weight(1f),
+                            label = { Text("من آية (1-$maxAyah)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
                     }
                 }
                 item {
+                    val maxAyah = ayahCountForSurah(endSurah)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(endSurah, { endSurah = it }, Modifier.weight(1f), label = { Text("السورة إلى") }, placeholder = { Text("نفس السورة") })
-                        OutlinedTextField(verseTo, { verseTo = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("إلى آية") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                        SelectionField(
+                            "السورة إلى",
+                            endSurah,
+                            quranSurahOptions(),
+                            {
+                                endSurah = it
+                                val max = ayahCountForSurah(it)
+                                verseTo = (verseTo.toIntOrNull() ?: 1).coerceIn(1, max).toString()
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            verseTo,
+                            { value ->
+                                val digits = value.filter(Char::isDigit)
+                                verseTo = if (digits.isBlank()) "" else (digits.toIntOrNull() ?: 1).coerceIn(1, maxAyah).toString()
+                            },
+                            Modifier.weight(1f),
+                            label = { Text("إلى آية (1-$maxAyah)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
                     }
                 }
             }
@@ -310,8 +350,9 @@ fun MonthlyTestsScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
 
 private data class QuestionDraft(
     val correct: Boolean = true,
-    val surah: String = "",
-    val ayah: String = "",
+    val surah: String = "الفاتحة",
+    val ayah: String = "1",
+    val ayahTo: String = "1",
     val reference: String = "",
 )
 
@@ -357,18 +398,7 @@ private fun MonthlyTestDialog(
                     val q = questions[index]
                     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
                         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("السؤال ${index + 1}", fontWeight = FontWeight.Bold)
-                                Row {
-                                    Checkbox(
-                                        checked = q.correct,
-                                        onCheckedChange = { checked ->
-                                            questions = questions.toMutableList().also { it[index] = q.copy(correct = checked) }
-                                        },
-                                    )
-                                    Text("صحيح", modifier = Modifier.padding(top = 12.dp))
-                                }
-                            }
+                            Text("السؤال ${index + 1}", fontWeight = FontWeight.Bold)
                             if (type == "MATN") {
                                 OutlinedTextField(
                                     q.reference,
@@ -376,22 +406,62 @@ private fun MonthlyTestDialog(
                                     Modifier.fillMaxWidth(),
                                     label = { Text("المرجع أو المقطع") },
                                 )
+                                SelectionField(
+                                    "الإجابة",
+                                    if (q.correct) "صحيح" else "خطأ",
+                                    listOf("TRUE" to "صحيح", "FALSE" to "خطأ"),
+                                    { value -> questions = questions.toMutableList().also { it[index] = q.copy(correct = value == "TRUE") } },
+                                )
                             } else {
+                                val maxAyah = ayahCountForSurah(q.surah)
+                                SelectionField(
+                                    "السورة",
+                                    q.surah,
+                                    quranSurahOptions(),
+                                    { value ->
+                                        val max = ayahCountForSurah(value)
+                                        questions = questions.toMutableList().also {
+                                            it[index] = q.copy(
+                                                surah = value,
+                                                ayah = (q.ayah.toIntOrNull() ?: 1).coerceIn(1, max).toString(),
+                                                ayahTo = (q.ayahTo.toIntOrNull() ?: 1).coerceIn(1, max).toString(),
+                                            )
+                                        }
+                                    },
+                                )
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedTextField(
-                                        q.surah,
-                                        { value -> questions = questions.toMutableList().also { it[index] = q.copy(surah = value) } },
+                                        q.ayah,
+                                        { value ->
+                                            val digits = value.filter(Char::isDigit)
+                                            val fromValue = if (digits.isBlank()) "" else (digits.toIntOrNull() ?: 1).coerceIn(1, maxAyah).toString()
+                                            val fromInt = fromValue.toIntOrNull() ?: 1
+                                            val toValue = (q.ayahTo.toIntOrNull() ?: fromInt).coerceIn(fromInt, maxAyah).toString()
+                                            questions = questions.toMutableList().also { it[index] = q.copy(ayah = fromValue, ayahTo = toValue) }
+                                        },
                                         Modifier.weight(1f),
-                                        label = { Text("السورة") },
+                                        label = { Text("من آية (1-$maxAyah)") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     )
                                     OutlinedTextField(
-                                        q.ayah,
-                                        { value -> questions = questions.toMutableList().also { it[index] = q.copy(ayah = value.filter(Char::isDigit)) } },
+                                        q.ayahTo,
+                                        { value ->
+                                            val digits = value.filter(Char::isDigit)
+                                            val minimum = q.ayah.toIntOrNull() ?: 1
+                                            val toValue = if (digits.isBlank()) "" else (digits.toIntOrNull() ?: minimum).coerceIn(minimum, maxAyah).toString()
+                                            questions = questions.toMutableList().also { it[index] = q.copy(ayahTo = toValue) }
+                                        },
                                         Modifier.weight(1f),
-                                        label = { Text("الآية") },
+                                        label = { Text("إلى آية") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     )
                                 }
+                                SelectionField(
+                                    "الإجابة",
+                                    if (q.correct) "صحيح" else "خطأ",
+                                    listOf("TRUE" to "صحيح", "FALSE" to "خطأ"),
+                                    { value -> questions = questions.toMutableList().also { it[index] = q.copy(correct = value == "TRUE") } },
+                                )
                             }
                         }
                     }
@@ -411,7 +481,17 @@ private fun MonthlyTestDialog(
         confirmButton = {
             TextButton(
                 enabled = studentId.isNotBlank() && selectedStudent != null &&
-                    questions.isNotEmpty() && (type != "MATN" || matnName.isNotBlank()),
+                    questions.isNotEmpty() &&
+                    (if (type == "MATN") {
+                        matnName.isNotBlank() && questions.all { it.reference.isNotBlank() }
+                    } else {
+                        questions.all {
+                            val max = ayahCountForSurah(it.surah)
+                            val fromValue = it.ayah.toIntOrNull()
+                            val toValue = it.ayahTo.toIntOrNull()
+                            max > 0 && fromValue != null && toValue != null && fromValue in 1..max && toValue in fromValue..max
+                        }
+                    }),
                 onClick = {
                     val student = selectedStudent ?: return@TextButton
                     onSubmit(
@@ -428,6 +508,7 @@ private fun MonthlyTestDialog(
                                     correct = q.correct,
                                     surah = q.surah.ifBlank { null },
                                     ayah = q.ayah.toIntOrNull(),
+                                    ayahTo = q.ayahTo.toIntOrNull(),
                                     referenceText = q.reference.ifBlank { null },
                                 )
                             },
@@ -540,7 +621,7 @@ fun LeavesScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                             when (leave.status) { "APPROVED" -> true; "REJECTED" -> false; else -> null },
                         )
                     }
-                    Text("${formatDate(leave.fromDate)} — ${formatDate(leave.toDate ?: leave.fromDate)}")
+                    Text(if (leave.type == "DAY_OFF") formatDate(leave.fromDate) else "${formatDate(leave.fromDate)} — ${formatDate(leave.toDate ?: leave.fromDate)}")
                     leave.reason?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
                     leave.reviewNote?.let { Text("ملاحظة الإدارة: $it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
                     if (isAdmin && leave.status == "PENDING") {
@@ -556,26 +637,77 @@ fun LeavesScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
     }
 
     if (showCreate) {
-        var type by remember { mutableStateOf("VACATION") }
+        var type by remember { mutableStateOf("DAY_OFF") }
         var from by remember { mutableStateOf(todayIso()) }
-        var to by remember { mutableStateOf(todayIso()) }
+        var to by remember { mutableStateOf(tomorrowIso()) }
         var reason by remember { mutableStateOf("") }
+
+        val fromValid = isDateOnOrAfter(from, todayIso())
+        val toValid = type == "DAY_OFF" || (isDateOnOrAfter(to, tomorrowIso(from)) && to != from)
+        val reasonValid = reason.trim().length >= 3
+
         AlertDialog(
             onDismissRequest = { showCreate = false },
             title = { Text("طلب إجازة") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SelectionField("النوع", statusLabel(type), listOf("VACATION" to "إجازة", "DAY_OFF" to "يوم إجازة"), { type = it })
-                    OutlinedTextField(from, { from = it }, Modifier.fillMaxWidth(), label = { Text("من YYYY-MM-DD") })
-                    OutlinedTextField(to, { to = it }, Modifier.fillMaxWidth(), label = { Text("إلى YYYY-MM-DD") })
-                    OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text("السبب") }, minLines = 3)
+                    SelectionField(
+                        "النوع",
+                        statusLabel(type),
+                        listOf("DAY_OFF" to "يوم إجازة", "VACATION" to "إجازة"),
+                        { selected ->
+                            type = selected
+                            to = if (selected == "VACATION") tomorrowIso(from) else from
+                        },
+                    )
+                    OutlinedTextField(
+                        from,
+                        { value ->
+                            from = value
+                            if (type == "DAY_OFF") {
+                                to = value
+                            } else if (value.length == 10 && (!isDateOnOrAfter(to, tomorrowIso(value)) || to == value)) {
+                                to = tomorrowIso(value)
+                            }
+                        },
+                        Modifier.fillMaxWidth(),
+                        label = { Text(if (type == "DAY_OFF") "التاريخ YYYY-MM-DD" else "من YYYY-MM-DD") },
+                        supportingText = { Text("اليوم أو تاريخ لاحق فقط") },
+                    )
+                    if (type == "VACATION") {
+                        OutlinedTextField(
+                            to,
+                            { to = it },
+                            Modifier.fillMaxWidth(),
+                            label = { Text("إلى YYYY-MM-DD") },
+                            supportingText = { Text("اليوم التالي على الأقل: ${tomorrowIso(from)}") },
+                        )
+                    }
+                    OutlinedTextField(
+                        reason,
+                        { reason = it },
+                        Modifier.fillMaxWidth(),
+                        label = { Text("السبب *") },
+                        supportingText = { Text("السبب مطلوب") },
+                        minLines = 3,
+                    )
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.createLeave(CreateLeaveRequest(type, from, to, reason.ifBlank { null }))
-                    showCreate = false
-                }) { Text("إرسال") }
+                TextButton(
+                    enabled = fromValid && toValid && reasonValid,
+                    onClick = {
+                        viewModel.createLeave(
+                            CreateLeaveRequest(
+                                type = type,
+                                fromDate = from,
+                                toDate = if (type == "DAY_OFF") from else to,
+                                reason = reason.trim(),
+                            ),
+                        )
+                        showCreate = false
+                    },
+                ) { Text("إرسال") }
             },
             dismissButton = { TextButton(onClick = { showCreate = false }) { Text("إلغاء") } },
         )

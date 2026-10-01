@@ -295,6 +295,7 @@ model MonthlyTestQuestion {
   correct        Boolean
   surah          String?
   ayah           Int?
+  ayahTo         Int?     @map("ayah_to")
   referenceText  String?  @map("reference_text")
   createdAt      DateTime @default(now()) @map("created_at")
 

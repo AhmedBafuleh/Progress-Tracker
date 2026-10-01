@@ -179,6 +179,7 @@ export type MonthlyTestQuestion = {
   correct: boolean;
   surah?: string | null;
   ayah?: number | null;
+  ayahTo?: number | null;
   referenceText?: string | null;
 };
 

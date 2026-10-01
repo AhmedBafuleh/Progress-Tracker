@@ -2,10 +2,42 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api, type Halaqah, type HalaqahReport, type LeaveRequest, type MonthlyTest, type MonthlyTestQuestion, type NoteViolation, type SessionUser, type StudentNotification, type StudentOption } from './api';
 import { Icon } from './icons';
 import { DateField, DateTimeField } from './dateFields';
+import { QURAN_SURAHS, ayahCountForSurah } from './quran';
 
 const recordTypeLabels: Record<string, string> = { HIFZ: 'حفظ', NEAR_REVIEW: 'مراجعة قريب', FAR_REVIEW: 'مراجعة بعيد', MATN: 'متن' };
 const testTypeLabels: Record<string, string> = { HIFZ: 'حفظ', REVIEW: 'مراجعة', MATN: 'متن' };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+const addDays = (value: string, days: number) => {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+function SurahInput({ value, onChange, required = false, placeholder }: { value: string; onChange: (value: string) => void; required?: boolean; placeholder?: string }) {
+  return <input
+    list="quran-surah-options"
+    value={value}
+    onChange={(event) => onChange(event.target.value)}
+    required={required}
+    placeholder={placeholder}
+    autoComplete="off"
+  />;
+}
+
+function QuranSurahOptions() {
+  return <datalist id="quran-surah-options">
+    {QURAN_SURAHS.map((surah) => <option key={surah.number} value={surah.name}>{surah.number}. {surah.name}</option>)}
+  </datalist>;
+}
 const messageOf = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
 
 export function DailyProgressRecorder({ user, onSaved }: { user: SessionUser; onSaved?: (message: string) => void }) {
@@ -15,7 +47,7 @@ export function DailyProgressRecorder({ user, onSaved }: { user: SessionUser; on
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ halaqahId: '', studentId: '', periodId: '', attended: true, recordType: 'HIFZ', surah: '', verseFrom: 1, endSurah: '', verseTo: 1, matnName: '', matnFrom: '', matnTo: '', pages: 1, rating: 5, recordDate: today(), note: '' });
+  const [form, setForm] = useState({ halaqahId: '', studentId: '', periodId: '', attended: true, recordType: 'HIFZ', surah: 'الفاتحة', verseFrom: 1, endSurah: '', verseTo: 1, matnName: '', matnFrom: '', matnTo: '', pages: 1, rating: 5, recordDate: today(), note: '' });
 
   useEffect(() => {
     void Promise.all([api.listProgressStudents(), api.listPeriods()])
@@ -51,13 +83,14 @@ export function DailyProgressRecorder({ user, onSaved }: { user: SessionUser; on
       }
       const result = await api.createProgress(payload);
       setNotice(result.message); onSaved?.(result.message);
-      setForm((current) => ({ ...current, attended: true, recordType: 'HIFZ', surah: '', verseFrom: 1, endSurah: '', verseTo: 1, matnName: '', matnFrom: '', matnTo: '', pages: 1, rating: 5, note: '' }));
+      setForm((current) => ({ ...current, attended: true, recordType: 'HIFZ', surah: 'الفاتحة', verseFrom: 1, endSurah: '', verseTo: 1, matnName: '', matnFrom: '', matnTo: '', pages: 1, rating: 5, note: '' }));
     } catch (err) { setError(messageOf(err, 'تعذر حفظ متابعة الطالب')); }
     finally { setSaving(false); }
   }
 
   if (loading) return <div className="loading-panel">جارٍ تحميل بيانات المتابعة...</div>;
   return <section className="admin-panel">
+    <QuranSurahOptions />
     <div className="panel-heading"><div><span>{user.role === 'ADMIN' ? 'متابعة جميع الطلاب' : 'الحلقات المسندة إليك'}</span><h2>تسجيل المتابعة اليومية</h2></div><p>اختر الحلقة أولًا ثم الطالب وسجّل الحضور ونوع المتابعة.</p></div>
     {notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
     {students.length === 0 ? <div className="empty-state"><strong>لا يوجد طلاب متاحون للتسجيل</strong></div> : <form className="record-form" onSubmit={submit}>
@@ -77,8 +110,14 @@ export function DailyProgressRecorder({ user, onSaved }: { user: SessionUser; on
           <label>من<input value={form.matnFrom} onChange={(e) => setForm({ ...form, matnFrom: e.target.value })} placeholder="البيت / الباب / الموضع" /></label>
           <label>إلى<input value={form.matnTo} onChange={(e) => setForm({ ...form, matnTo: e.target.value })} placeholder="البيت / الباب / الموضع" /></label>
         </div></div> : <div className="record-range-box"><strong>{recordTypeLabels[form.recordType]}</strong>
-          <div className="quran-range-line"><label>السورة<input value={form.surah} onChange={(e) => setForm({ ...form, surah: e.target.value })} required /></label><label>من آية<input type="number" min={1} value={form.verseFrom} onChange={(e) => setForm({ ...form, verseFrom: Number(e.target.value) })} /></label></div>
-          <div className="quran-range-line"><label>السورة<input value={form.endSurah} onChange={(e) => setForm({ ...form, endSurah: e.target.value })} placeholder="نفس السورة إذا تُرك فارغًا" /></label><label>إلى آية<input type="number" min={1} value={form.verseTo} onChange={(e) => setForm({ ...form, verseTo: Number(e.target.value) })} /></label></div>
+          <div className="quran-range-line"><label>السورة<SurahInput value={form.surah} onChange={(value) => {
+            const max = ayahCountForSurah(value);
+            setForm({ ...form, surah: value, verseFrom: max ? Math.min(form.verseFrom, max) : form.verseFrom });
+          }} required /></label><label>من آية<input type="number" min={1} max={ayahCountForSurah(form.surah) || undefined} value={form.verseFrom} onChange={(e) => setForm({ ...form, verseFrom: Number(e.target.value) })} /></label></div>
+          <div className="quran-range-line"><label>السورة<SurahInput value={form.endSurah} onChange={(value) => {
+            const max = ayahCountForSurah(value || form.surah);
+            setForm({ ...form, endSurah: value, verseTo: max ? Math.min(form.verseTo, max) : form.verseTo });
+          }} placeholder="نفس السورة إذا تُرك فارغًا" /></label><label>إلى آية<input type="number" min={1} max={ayahCountForSurah(form.endSurah || form.surah) || undefined} value={form.verseTo} onChange={(e) => setForm({ ...form, verseTo: Number(e.target.value) })} /></label></div>
         </div>}
         <div className="record-row"><label>عدد الصفحات<input type="number" min={0} step="0.25" value={form.pages} onChange={(e) => setForm({ ...form, pages: Number(e.target.value) })} /></label><label>التقييم<select value={form.rating} onChange={(e) => setForm({ ...form, rating: Number(e.target.value) })}>{[5,4,3,2,1].map((r) => <option key={r} value={r}>{r} / 5</option>)}</select></label></div>
       </>}
@@ -90,18 +129,119 @@ export function DailyProgressRecorder({ user, onSaved }: { user: SessionUser; on
 }
 
 export function LeaveRequestsPanel({ user }: { user: SessionUser }) {
-  const [requests, setRequests] = useState<LeaveRequest[]>([]); const [form, setForm] = useState({ type: 'DAY_OFF', fromDate: today(), toDate: today(), reason: '' });
-  const [reviewNote, setReviewNote] = useState(''); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
-  async function refresh() { try { setRequests((await api.listLeaveRequests()).requests); } catch (err) { setError(messageOf(err, 'تعذر تحميل الطلبات')); } }
+  const initialFrom = today();
+  const [requests, setRequests] = useState<LeaveRequest[]>([]);
+  const [form, setForm] = useState({ type: 'DAY_OFF', fromDate: initialFrom, toDate: addDays(initialFrom, 1), reason: '' });
+  const [reviewNote, setReviewNote] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  async function refresh() {
+    try { setRequests((await api.listLeaveRequests()).requests); }
+    catch (err) { setError(messageOf(err, 'تعذر تحميل الطلبات')); }
+  }
+
   useEffect(() => { void refresh(); }, []);
-  async function submit(event: FormEvent) { event.preventDefault(); try { const result = await api.createLeaveRequest(form); setNotice(result.message); setForm({ type: 'DAY_OFF', fromDate: today(), toDate: today(), reason: '' }); await refresh(); } catch (err) { setError(messageOf(err, 'تعذر إرسال الطلب')); } }
-  async function review(id: string, status: 'APPROVED' | 'REJECTED') { try { const result = await api.reviewLeaveRequest(id, { status, reviewNote: reviewNote || null }); setNotice(result.message); setReviewNote(''); await refresh(); } catch (err) { setError(messageOf(err, 'تعذر تحديث الطلب')); } }
+  useEffect(() => {
+    if (!notice && !error) return;
+    const timeout = window.setTimeout(() => { setNotice(''); setError(''); }, 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice, error]);
+
+  function changeType(type: string) {
+    setForm((current) => ({
+      ...current,
+      type,
+      toDate: type === 'VACATION' ? addDays(current.fromDate || today(), 1) : current.fromDate,
+    }));
+  }
+
+  function changeFromDate(fromDate: string) {
+    setForm((current) => {
+      if (!fromDate) return { ...current, fromDate };
+      if (current.type === 'DAY_OFF') return { ...current, fromDate, toDate: fromDate };
+      const minimumEnd = addDays(fromDate, 1);
+      return {
+        ...current,
+        fromDate,
+        toDate: !current.toDate || current.toDate < minimumEnd ? minimumEnd : current.toDate,
+      };
+    });
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const payload = {
+        ...form,
+        toDate: form.type === 'DAY_OFF' ? form.fromDate : form.toDate,
+        reason: form.reason.trim(),
+      };
+      const result = await api.createLeaveRequest(payload);
+      setNotice(result.message);
+      setError('');
+      const nextFrom = today();
+      setForm({ type: 'DAY_OFF', fromDate: nextFrom, toDate: nextFrom, reason: '' });
+      await refresh();
+    } catch (err) {
+      setError(messageOf(err, 'تعذر إرسال الطلب'));
+    }
+  }
+
+  async function review(id: string, status: 'APPROVED' | 'REJECTED') {
+    try {
+      const result = await api.reviewLeaveRequest(id, { status, reviewNote: reviewNote || null });
+      setNotice(result.message);
+      setError('');
+      setReviewNote('');
+      await refresh();
+    } catch (err) {
+      setError(messageOf(err, 'تعذر تحديث الطلب'));
+    }
+  }
+
+  const minimumVacationEnd = form.fromDate ? addDays(form.fromDate, 1) : addDays(today(), 1);
+
   return <>
-    <section className="admin-panel"><div className="panel-heading"><div><span>الإجازات</span><h2>طلب إجازة أو يوم راحة</h2></div></div>{notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
-      <form className="user-form" onSubmit={submit}><label>نوع الطلب<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="DAY_OFF">يوم راحة</option><option value="VACATION">إجازة</option></select></label><div className="date-pair span-2"><label>من<DateField value={form.fromDate} onChange={(value) => setForm({ ...form, fromDate: value })} required /></label><label>إلى<DateField value={form.toDate} onChange={(value) => setForm({ ...form, toDate: value })} required /></label></div><label className="span-2">السبب<textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} /></label><div className="form-actions"><button className="primary-button">إرسال الطلب</button></div></form>
+    <section className="admin-panel">
+      <div className="panel-heading"><div><span>الإجازات</span><h2>طلب إجازة أو يوم راحة</h2></div></div>
+      {notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
+      <form className="user-form" onSubmit={submit}>
+        <label>نوع الطلب
+          <select value={form.type} onChange={(e) => changeType(e.target.value)}>
+            <option value="DAY_OFF">يوم راحة</option>
+            <option value="VACATION">إجازة</option>
+          </select>
+        </label>
+        {form.type === 'DAY_OFF' ? (
+          <label>التاريخ
+            <DateField value={form.fromDate} onChange={changeFromDate} min={today()} required />
+          </label>
+        ) : (
+          <div className="date-pair span-2">
+            <label>من
+              <DateField value={form.fromDate} onChange={changeFromDate} min={today()} required />
+            </label>
+            <label>إلى
+              <DateField
+                value={form.toDate}
+                onChange={(value) => setForm({ ...form, toDate: value })}
+                min={minimumVacationEnd}
+                required
+              />
+            </label>
+          </div>
+        )}
+        <label className="span-2">السبب
+          <textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} required minLength={3} placeholder="اكتب سبب الطلب" />
+        </label>
+        <div className="form-actions"><button className="primary-button">إرسال الطلب</button></div>
+      </form>
     </section>
-    <section className="admin-panel"><div className="panel-heading"><div><span>{user.role === 'ADMIN' ? 'جميع الطلبات' : 'طلباتي'}</span><h2>سجل الإجازات</h2></div></div>{user.role === 'ADMIN' && <label className="review-note-field">ملاحظة قرار الإدارة<input value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} placeholder="اختياري" /></label>}
-      <div className="table-wrap"><table><thead><tr><th>صاحب الطلب</th><th>النوع</th><th>الفترة</th><th>الحالة</th><th>السبب</th>{user.role === 'ADMIN' && <th>القرار</th>}</tr></thead><tbody>{requests.map((r) => <tr key={r.id}><td>{r.requester.fullName}</td><td>{r.type === 'VACATION' ? 'إجازة' : 'يوم راحة'}</td><td>{new Date(r.fromDate).toLocaleDateString('ar-SA')} — {new Date(r.toDate || r.fromDate).toLocaleDateString('ar-SA')}</td><td><span className="status-chip">{r.status === 'PENDING' ? 'قيد المراجعة' : r.status === 'APPROVED' ? 'مقبول' : 'مرفوض'}</span></td><td>{r.reason || '—'}</td>{user.role === 'ADMIN' && <td>{r.status === 'PENDING' ? <div className="table-actions"><button className="table-action" onClick={() => void review(r.id, 'APPROVED')}><Icon name="check" /></button><button className="table-action danger" onClick={() => void review(r.id, 'REJECTED')}>×</button></div> : 'تمت المراجعة'}</td>}</tr>)}</tbody></table></div>
+    <section className="admin-panel">
+      <div className="panel-heading"><div><span>{user.role === 'ADMIN' ? 'جميع الطلبات' : 'طلباتي'}</span><h2>سجل الإجازات</h2></div></div>
+      {user.role === 'ADMIN' && <label className="review-note-field">ملاحظة قرار الإدارة<input value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} placeholder="اختياري" /></label>}
+      <div className="table-wrap"><table><thead><tr><th>صاحب الطلب</th><th>النوع</th><th>الفترة</th><th>الحالة</th><th>السبب</th>{user.role === 'ADMIN' && <th>القرار</th>}</tr></thead><tbody>{requests.map((r) => <tr key={r.id}><td>{r.requester.fullName}</td><td>{r.type === 'VACATION' ? 'إجازة' : 'يوم راحة'}</td><td>{r.type === 'DAY_OFF' ? new Date(r.fromDate).toLocaleDateString('ar-SA') : `${new Date(r.fromDate).toLocaleDateString('ar-SA')} — ${new Date(r.toDate || r.fromDate).toLocaleDateString('ar-SA')}`}</td><td><span className="status-chip">{r.status === 'PENDING' ? 'قيد المراجعة' : r.status === 'APPROVED' ? 'مقبول' : 'مرفوض'}</span></td><td>{r.reason || '—'}</td>{user.role === 'ADMIN' && <td>{r.status === 'PENDING' ? <div className="table-actions"><button className="table-action" onClick={() => void review(r.id, 'APPROVED')}><Icon name="check" /></button><button className="table-action danger" onClick={() => void review(r.id, 'REJECTED')}>×</button></div> : 'تمت المراجعة'}</td>}</tr>)}</tbody></table></div>
       {requests.length === 0 && <div className="empty-state"><strong>لا توجد طلبات</strong></div>}
     </section>
   </>;
@@ -132,22 +272,42 @@ export function NotesPanel({ user }: { user: SessionUser }) {
 
 export function MonthlyTestsPanel({ user }: { user: SessionUser }) {
   const [students, setStudents] = useState<StudentOption[]>([]); const [tests, setTests] = useState<MonthlyTest[]>([]);
-  const [questions, setQuestions] = useState<MonthlyTestQuestion[]>([{ questionNumber: 1, correct: true, surah: '', ayah: 1, referenceText: '' }]);
+  const [questions, setQuestions] = useState<MonthlyTestQuestion[]>([{ questionNumber: 1, correct: true, surah: 'الفاتحة', ayah: 1, ayahTo: 1, referenceText: '' }]);
   const [form, setForm] = useState({ halaqahId: '', studentId: '', type: 'HIFZ', matnName: '', testDate: today(), note: '' }); const [notice, setNotice] = useState(''); const [error, setError] = useState('');
   async function refresh() { try { const [s, t] = await Promise.all([api.listProgressStudents(), api.listMonthlyTests()]); setStudents(s.students); setTests(t.tests); const first = s.students[0]; setForm((current) => ({ ...current, halaqahId: current.halaqahId || first?.halaqah.id || '', studentId: current.studentId || first?.id || '' })); } catch (err) { setError(messageOf(err, 'تعذر تحميل الاختبارات')); } }
   useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    if (!notice && !error) return;
+    const timeout = window.setTimeout(() => { setNotice(''); setError(''); }, 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice, error]);
   const halaqahs = useMemo(() => { const map = new Map<string,string>(); students.forEach((s) => map.set(s.halaqah.id, s.halaqah.name)); return [...map.entries()].map(([id,name]) => ({ id,name })); }, [students]);
   const filteredStudents = students.filter((s) => s.halaqah.id === form.halaqahId); const scorePreview = questions.length ? Math.round((questions.filter((q) => q.correct).length / questions.length) * 100) : 0;
   function chooseHalaqah(halaqahId: string) { const first = students.find((s) => s.halaqah.id === halaqahId); setForm((current) => ({ ...current, halaqahId, studentId: first?.id || '' })); }
-  function addQuestion() { setQuestions((current) => [...current, { questionNumber: current.length + 1, correct: true, surah: '', ayah: 1, referenceText: '' }]); }
+  function addQuestion() { setQuestions((current) => [...current, { questionNumber: current.length + 1, correct: true, surah: 'الفاتحة', ayah: 1, ayahTo: 1, referenceText: '' }]); }
   function updateQuestion(index: number, patch: Partial<MonthlyTestQuestion>) { setQuestions((current) => current.map((q, i) => i === index ? { ...q, ...patch } : q)); }
   function removeQuestion(index: number) { setQuestions((current) => current.filter((_, i) => i !== index).map((q, i) => ({ ...q, questionNumber: i + 1 }))); }
-  async function submit(event: FormEvent) { event.preventDefault(); try { const result = await api.createMonthlyTest({ ...form, questions }); setNotice(result.message); setQuestions([{ questionNumber: 1, correct: true, surah: '', ayah: 1, referenceText: '' }]); setForm((current) => ({ ...current, note: '', matnName: '' })); await refresh(); } catch (err) { setError(messageOf(err, 'تعذر حفظ الاختبار')); } }
+  async function submit(event: FormEvent) { event.preventDefault(); try { const result = await api.createMonthlyTest({ ...form, questions }); setNotice(result.message); setQuestions([{ questionNumber: 1, correct: true, surah: 'الفاتحة', ayah: 1, ayahTo: 1, referenceText: '' }]); setForm((current) => ({ ...current, note: '', matnName: '' })); await refresh(); } catch (err) { setError(messageOf(err, 'تعذر حفظ الاختبار')); } }
   return <>
+    <QuranSurahOptions />
     <section className="admin-panel"><div className="panel-heading"><div><span>التقييم الشهري</span><h2>اختبار شهري جديد</h2></div><div className="test-score-preview"><strong>{scorePreview}</strong><span>/100</span></div></div>{notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
       {students.length ? <form onSubmit={submit}><div className="record-row monthly-test-header"><label>الحلقة<select value={form.halaqahId} onChange={(e) => chooseHalaqah(e.target.value)}>{halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label><label>الطالب<select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>{filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.user.fullName}</option>)}</select></label><label>نوع الاختبار<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="HIFZ">حفظ</option><option value="REVIEW">مراجعة</option><option value="MATN">متن</option></select></label><label>التاريخ<DateField value={form.testDate} onChange={(value) => setForm({ ...form, testDate: value })} required /></label></div>
         {form.type === 'MATN' && <label className="standalone-field">اسم المتن<input value={form.matnName} onChange={(e) => setForm({ ...form, matnName: e.target.value })} required /></label>}
-        <div className="test-questions">{questions.map((q, index) => <div className="test-question" key={index}><div className="question-number">{q.questionNumber}</div>{form.type === 'MATN' ? <label>موضع السؤال<input value={q.referenceText || ''} onChange={(e) => updateQuestion(index, { referenceText: e.target.value })} placeholder="البيت أو الباب أو الموضع" /></label> : <><label>السورة<input value={q.surah || ''} onChange={(e) => updateQuestion(index, { surah: e.target.value })} required /></label><label>الآية<input type="number" min={1} value={q.ayah || 1} onChange={(e) => updateQuestion(index, { ayah: Number(e.target.value) })} /></label></>}<label>الإجابة<select value={q.correct ? 'TRUE' : 'FALSE'} onChange={(e) => updateQuestion(index, { correct: e.target.value === 'TRUE' })}><option value="TRUE">صحيح</option><option value="FALSE">خطأ</option></select></label>{questions.length > 1 && <button type="button" className="table-action danger" onClick={() => removeQuestion(index)}><Icon name="trash" /></button>}</div>)}<button type="button" className="secondary-button compact-button add-question" onClick={addQuestion}><Icon name="plus" size={17} />إضافة سؤال</button></div>
+        <div className="test-questions">{questions.map((q, index) => <div className="test-question" key={index}><div className="question-number">{q.questionNumber}</div>{form.type === 'MATN' ? <label>موضع السؤال<input value={q.referenceText || ''} onChange={(e) => updateQuestion(index, { referenceText: e.target.value })} placeholder="البيت أو الباب أو الموضع" /></label> : <>
+          <label>السورة<SurahInput value={q.surah || ''} onChange={(value) => {
+            const max = ayahCountForSurah(value);
+            updateQuestion(index, {
+              surah: value,
+              ayah: max ? Math.min(q.ayah || 1, max) : q.ayah,
+              ayahTo: max ? Math.min(q.ayahTo || q.ayah || 1, max) : q.ayahTo,
+            });
+          }} required /></label>
+          <label>من آية<input type="number" min={1} max={ayahCountForSurah(q.surah) || undefined} value={q.ayah || 1} onChange={(e) => {
+            const next = Number(e.target.value);
+            updateQuestion(index, { ayah: next, ayahTo: Math.max(next, q.ayahTo || next) });
+          }} /></label>
+          <label>إلى آية<input type="number" min={q.ayah || 1} max={ayahCountForSurah(q.surah) || undefined} value={q.ayahTo || q.ayah || 1} onChange={(e) => updateQuestion(index, { ayahTo: Number(e.target.value) })} /></label>
+        </>}<label>الإجابة<select value={q.correct ? 'TRUE' : 'FALSE'} onChange={(e) => updateQuestion(index, { correct: e.target.value === 'TRUE' })}><option value="TRUE">صحيح</option><option value="FALSE">خطأ</option></select></label>{questions.length > 1 && <button type="button" className="table-action danger" onClick={() => removeQuestion(index)}><Icon name="trash" /></button>}</div>)}<button type="button" className="secondary-button compact-button add-question" onClick={addQuestion}><Icon name="plus" size={17} />إضافة سؤال</button></div>
         <label className="standalone-field">ملاحظات عامة<textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label><div className="form-actions"><button className="primary-button">حفظ الاختبار — {scorePreview}/100</button></div>
       </form> : <div className="empty-state"><strong>لا يوجد طلاب متاحون للاختبار</strong></div>}
     </section>

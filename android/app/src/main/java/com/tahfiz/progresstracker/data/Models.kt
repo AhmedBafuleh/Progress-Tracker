@@ -265,6 +265,7 @@ data class MonthlyTestQuestionDto(
     val correct: Boolean,
     val surah: String? = null,
     val ayah: Int? = null,
+    val ayahTo: Int? = null,
     val referenceText: String? = null,
 )
 

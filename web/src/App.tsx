@@ -428,13 +428,17 @@ function DashboardShell<T extends string>({
             </div>
           ))}
         </nav>
-        <button className="sidebar-logout" onClick={onLogout}><Icon name="logout" size={18} /><span>تسجيل الخروج</span></button>
       </aside>
       <main className="admin-main">
         <nav className="dashboard-top-nav" aria-label="روابط الموقع العامة">
-          <Link to="/">الرئيسية</Link>
-          <Link to="/library">المكتبة</Link>
-          <Link to="/media">الإعلام والأنشطة</Link>
+          <div className="dashboard-public-links">
+            <Link to="/">الرئيسية</Link>
+            <Link to="/library">المكتبة</Link>
+            <Link to="/media">الإعلام والأنشطة</Link>
+          </div>
+          <button className="dashboard-logout" type="button" onClick={onLogout}>
+            <Icon name="logout" size={17} /><span>تسجيل الخروج</span>
+          </button>
         </nav>
         <div className="admin-header">
           <div><span>{roleLabels[user.role]}</span><h1>{user.fullName}</h1><small dir="ltr">{user.loginId}</small></div>
@@ -476,6 +480,15 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!notice && !error) return;
+    const timeout = window.setTimeout(() => {
+      setNotice('');
+      setError('');
+    }, 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice, error]);
 
   const isAdmin = mode === 'ADMIN';
 
@@ -1288,7 +1301,7 @@ export default function App() {
     api.me().then((result) => setUser(result.user)).catch(() => clearToken()).finally(() => setChecking(false));
   }, []);
 
-  function logout() { clearToken(); setUser(null); window.location.href = '/'; }
+  function logout() { clearToken(); setUser(null); window.location.href = '/login'; }
   if (checking) return <div className="app-loading">جارٍ تحميل النظام...</div>;
 
   return (

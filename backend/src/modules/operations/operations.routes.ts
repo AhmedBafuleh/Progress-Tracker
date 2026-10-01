@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../../config/prisma.js';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { AppError } from '../../shared/AppError.js';
+import { assertAyahInSurah, findSurah } from '../../shared/quran.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -30,10 +31,23 @@ async function findStudentByUser(userId: string) {
 // Leave / day-off requests
 const leaveSchema = z.object({
   type: z.enum(['VACATION', 'DAY_OFF']),
-  fromDate: z.string().min(8),
-  toDate: z.string().min(8).optional().nullable(),
-  reason: z.string().trim().max(1000).optional().nullable(),
+  fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'صيغة التاريخ غير صحيحة'),
+  toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'صيغة التاريخ غير صحيحة').optional().nullable(),
+  reason: z.string().trim().min(3, 'يجب كتابة سبب الطلب').max(1000),
 });
+
+function localDateOnly(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysDateOnly(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
 
 router.get('/leaves', requireRole(Role.ADMIN, Role.MANAGER, Role.TEACHER, Role.STUDENT), async (req, res, next) => {
   try {
@@ -58,9 +72,24 @@ router.get('/leaves', requireRole(Role.ADMIN, Role.MANAGER, Role.TEACHER, Role.S
 router.post('/leaves', requireRole(Role.ADMIN, Role.MANAGER, Role.TEACHER, Role.STUDENT), async (req, res, next) => {
   try {
     const input = leaveSchema.parse(req.body);
+    const today = localDateOnly();
+    if (input.fromDate < today) {
+      throw new AppError('لا يمكن اختيار تاريخ سابق لليوم', 400, 'PAST_LEAVE_DATE');
+    }
+
+    const normalizedToDate = input.type === 'DAY_OFF' ? input.fromDate : input.toDate;
+    if (input.type === 'VACATION') {
+      if (!normalizedToDate) {
+        throw new AppError('يجب تحديد تاريخ نهاية الإجازة', 400, 'LEAVE_END_DATE_REQUIRED');
+      }
+      const minimumEndDate = addDaysDateOnly(input.fromDate, 1);
+      if (normalizedToDate < minimumEndDate) {
+        throw new AppError('إجازة المدة يجب أن تنتهي في اليوم التالي على الأقل', 400, 'INVALID_DATE_RANGE');
+      }
+    }
+
     const fromDate = new Date(`${input.fromDate}T00:00:00.000Z`);
-    const toDate = input.toDate ? new Date(`${input.toDate}T00:00:00.000Z`) : fromDate;
-    if (toDate < fromDate) throw new AppError('تاريخ النهاية يجب ألا يسبق تاريخ البداية', 400, 'INVALID_DATE_RANGE');
+    const toDate = new Date(`${normalizedToDate || input.fromDate}T00:00:00.000Z`);
 
     const request = await prisma.leaveRequest.create({
       data: {
@@ -210,6 +239,7 @@ const questionSchema = z.object({
   correct: z.boolean(),
   surah: z.string().trim().max(120).optional().nullable(),
   ayah: z.coerce.number().int().min(1).optional().nullable(),
+  ayahTo: z.coerce.number().int().min(1).optional().nullable(),
   referenceText: z.string().trim().max(300).optional().nullable(),
 });
 
@@ -262,8 +292,26 @@ router.post('/monthly-tests', requireRole(Role.ADMIN, Role.TEACHER), async (req,
     if (input.type === 'MATN' && !input.matnName) {
       throw new AppError('يجب إدخال اسم المتن', 400, 'MATN_NAME_REQUIRED');
     }
-    if (input.type !== 'MATN' && input.questions.some((q) => !q.surah || !q.ayah)) {
-      throw new AppError('كل سؤال حفظ أو مراجعة يجب أن يحتوي على السورة والآية', 400, 'QURAN_QUESTION_REFERENCE_REQUIRED');
+    if (input.type !== 'MATN' && input.questions.some((q) => !q.surah || !q.ayah || !q.ayahTo)) {
+      throw new AppError('كل سؤال حفظ أو مراجعة يجب أن يحتوي على السورة ومن آية وإلى آية', 400, 'QURAN_QUESTION_REFERENCE_REQUIRED');
+    }
+
+    if (input.type !== 'MATN') {
+      for (const question of input.questions) {
+        const surah = findSurah(question.surah);
+        if (!surah) {
+          throw new AppError(`السورة غير معروفة: ${question.surah || ''}`, 400, 'INVALID_SURAH');
+        }
+        try {
+          assertAyahInSurah(surah.name, question.ayah!, 'الآية الأولى');
+          assertAyahInSurah(surah.name, question.ayahTo!, 'الآية الأخيرة');
+        } catch (error) {
+          throw new AppError(error instanceof Error ? error.message : 'رقم الآية غير صالح', 400, 'INVALID_AYAH');
+        }
+        if (question.ayahTo! < question.ayah!) {
+          throw new AppError('الآية الأخيرة يجب أن تكون أكبر من أو تساوي الآية الأولى', 400, 'INVALID_VERSE_RANGE');
+        }
+      }
     }
 
     const uniqueQuestionNumbers = new Set(input.questions.map((q) => q.questionNumber));
@@ -290,6 +338,7 @@ router.post('/monthly-tests', requireRole(Role.ADMIN, Role.TEACHER), async (req,
             correct: question.correct,
             surah: input.type === 'MATN' ? null : question.surah,
             ayah: input.type === 'MATN' ? null : question.ayah,
+            ayahTo: input.type === 'MATN' ? null : question.ayahTo,
             referenceText: input.type === 'MATN' ? question.referenceText || null : null,
           })),
         },
