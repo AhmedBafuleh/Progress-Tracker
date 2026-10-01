@@ -350,8 +350,9 @@ fun MonthlyTestsScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
 
 private data class QuestionDraft(
     val correct: Boolean = true,
-    val surah: String = "",
-    val ayah: String = "",
+    val surah: String = "الفاتحة",
+    val ayah: String = "1",
+    val ayahTo: String = "1",
     val reference: String = "",
 )
 
@@ -397,18 +398,7 @@ private fun MonthlyTestDialog(
                     val q = questions[index]
                     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
                         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("السؤال ${index + 1}", fontWeight = FontWeight.Bold)
-                                Row {
-                                    Checkbox(
-                                        checked = q.correct,
-                                        onCheckedChange = { checked ->
-                                            questions = questions.toMutableList().also { it[index] = q.copy(correct = checked) }
-                                        },
-                                    )
-                                    Text("صحيح", modifier = Modifier.padding(top = 12.dp))
-                                }
-                            }
+                            Text("السؤال ${index + 1}", fontWeight = FontWeight.Bold)
                             if (type == "MATN") {
                                 OutlinedTextField(
                                     q.reference,
@@ -416,22 +406,62 @@ private fun MonthlyTestDialog(
                                     Modifier.fillMaxWidth(),
                                     label = { Text("المرجع أو المقطع") },
                                 )
+                                SelectionField(
+                                    "الإجابة",
+                                    if (q.correct) "صحيح" else "خطأ",
+                                    listOf("TRUE" to "صحيح", "FALSE" to "خطأ"),
+                                    { value -> questions = questions.toMutableList().also { it[index] = q.copy(correct = value == "TRUE") } },
+                                )
                             } else {
+                                val maxAyah = ayahCountForSurah(q.surah)
+                                SelectionField(
+                                    "السورة",
+                                    q.surah,
+                                    quranSurahOptions(),
+                                    { value ->
+                                        val max = ayahCountForSurah(value)
+                                        questions = questions.toMutableList().also {
+                                            it[index] = q.copy(
+                                                surah = value,
+                                                ayah = (q.ayah.toIntOrNull() ?: 1).coerceIn(1, max).toString(),
+                                                ayahTo = (q.ayahTo.toIntOrNull() ?: 1).coerceIn(1, max).toString(),
+                                            )
+                                        }
+                                    },
+                                )
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedTextField(
-                                        q.surah,
-                                        { value -> questions = questions.toMutableList().also { it[index] = q.copy(surah = value) } },
+                                        q.ayah,
+                                        { value ->
+                                            val digits = value.filter(Char::isDigit)
+                                            val fromValue = if (digits.isBlank()) "" else (digits.toIntOrNull() ?: 1).coerceIn(1, maxAyah).toString()
+                                            val fromInt = fromValue.toIntOrNull() ?: 1
+                                            val toValue = (q.ayahTo.toIntOrNull() ?: fromInt).coerceIn(fromInt, maxAyah).toString()
+                                            questions = questions.toMutableList().also { it[index] = q.copy(ayah = fromValue, ayahTo = toValue) }
+                                        },
                                         Modifier.weight(1f),
-                                        label = { Text("السورة") },
+                                        label = { Text("من آية (1-$maxAyah)") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     )
                                     OutlinedTextField(
-                                        q.ayah,
-                                        { value -> questions = questions.toMutableList().also { it[index] = q.copy(ayah = value.filter(Char::isDigit)) } },
+                                        q.ayahTo,
+                                        { value ->
+                                            val digits = value.filter(Char::isDigit)
+                                            val minimum = q.ayah.toIntOrNull() ?: 1
+                                            val toValue = if (digits.isBlank()) "" else (digits.toIntOrNull() ?: minimum).coerceIn(minimum, maxAyah).toString()
+                                            questions = questions.toMutableList().also { it[index] = q.copy(ayahTo = toValue) }
+                                        },
                                         Modifier.weight(1f),
-                                        label = { Text("الآية") },
+                                        label = { Text("إلى آية") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     )
                                 }
+                                SelectionField(
+                                    "الإجابة",
+                                    if (q.correct) "صحيح" else "خطأ",
+                                    listOf("TRUE" to "صحيح", "FALSE" to "خطأ"),
+                                    { value -> questions = questions.toMutableList().also { it[index] = q.copy(correct = value == "TRUE") } },
+                                )
                             }
                         }
                     }
@@ -451,7 +481,15 @@ private fun MonthlyTestDialog(
         confirmButton = {
             TextButton(
                 enabled = studentId.isNotBlank() && selectedStudent != null &&
-                    questions.isNotEmpty() && (type != "MATN" || matnName.isNotBlank()),
+                    questions.isNotEmpty() &&
+                    (type == "MATN"
+                        ? matnName.isNotBlank() && questions.all { it.reference.isNotBlank() }
+                        : questions.all {
+                            val max = ayahCountForSurah(it.surah)
+                            val fromValue = it.ayah.toIntOrNull()
+                            val toValue = it.ayahTo.toIntOrNull()
+                            max > 0 && fromValue != null && toValue != null && fromValue in 1..max && toValue in fromValue..max
+                        }),
                 onClick = {
                     val student = selectedStudent ?: return@TextButton
                     onSubmit(
@@ -468,6 +506,7 @@ private fun MonthlyTestDialog(
                                     correct = q.correct,
                                     surah = q.surah.ifBlank { null },
                                     ayah = q.ayah.toIntOrNull(),
+                                    ayahTo = q.ayahTo.toIntOrNull(),
                                     referenceText = q.reference.ifBlank { null },
                                 )
                             },
