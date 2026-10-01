@@ -3,7 +3,9 @@ package com.tahfiz.progresstracker
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +63,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tahfiz.progresstracker.data.ActivityDto
@@ -84,6 +87,11 @@ fun PublicSiteApp(
     snackbarHostState: SnackbarHostState,
 ) {
     val user = state.user
+    var selectedPost by remember { mutableStateOf<ActivityDto?>(null) }
+
+    BackHandler(enabled = selectedPost != null) {
+        selectedPost = null
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -166,7 +174,14 @@ fun PublicSiteApp(
                     onOpenDashboard = onOpenDashboard,
                 )
                 PublicPage.LIBRARY -> PublicLibraryScreen(state.publicLibrary)
-                PublicPage.MEDIA -> PublicMediaScreen(state.publicMedia)
+                PublicPage.MEDIA -> {
+                    val post = selectedPost
+                    if (post == null) {
+                        PublicMediaScreen(state.publicMedia, onOpenPost = { selectedPost = it })
+                    } else {
+                        PublicMediaDetailsScreen(post, onBack = { selectedPost = null })
+                    }
+                }
                 PublicPage.LOGIN -> {
                     if (user == null) {
                         PublicLoginContent(state, viewModel)
@@ -383,48 +398,102 @@ private fun PublicLibraryScreen(items: List<LibraryItemDto>) {
 }
 
 @Composable
-private fun PublicMediaScreen(items: List<ActivityDto>) {
+private fun PublicMediaScreen(
+    items: List<ActivityDto>,
+    onOpenPost: (ActivityDto) -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item { ScreenHeader("الإعلام والأنشطة", "آخر أخبار المركز وأنشطته", "اضغط على أي منشور لعرض التفاصيل كاملة.") }
+        items(items, key = { it.id }) { activity ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenPost(activity) },
+                shape = RoundedCornerShape(20.dp),
+            ) {
+                Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(activity.category, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(activity.title, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    Text(
+                        activity.content,
+                        lineHeight = 21.sp,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("عرض التفاصيل", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(formatDate(activity.createdAt), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+        if (items.isEmpty()) item { EmptyState("لا توجد منشورات حاليًا") }
+    }
+}
+
+@Composable
+private fun PublicMediaDetailsScreen(
+    activity: ActivityDto,
+    onBack: () -> Unit,
+) {
     val context = LocalContext.current
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { ScreenHeader("الإعلام والأنشطة", "آخر أخبار المركز وأنشطته", "الإعلانات والفعاليات والأنشطة المنشورة للزوار.") }
-        items(items, key = { it.id }) { activity ->
-            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-                Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(activity.category, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text(activity.title, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                    Text(activity.content, lineHeight = 21.sp)
-                    val assets = if (activity.assets.isNotEmpty()) {
-                        activity.assets
-                    } else {
-                        emptyList()
-                    }
-                    assets.forEach { asset ->
-                        OutlinedButton(
-                            onClick = { openPublicUrl(context, asset.url) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(Icons.Outlined.OpenInNew, contentDescription = null)
-                            Text(if (asset.kind == "VIDEO") "فتح الفيديو" else "فتح الصورة")
-                        }
-                    }
-                    activity.imageUrl?.takeIf { assets.isEmpty() }?.let { legacy ->
-                        OutlinedButton(
-                            onClick = { openPublicUrl(context, legacy) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(Icons.Outlined.OpenInNew, contentDescription = null)
-                            Text("فتح الصورة")
-                        }
-                    }
+        item {
+            TextButton(onClick = onBack) {
+                Text("العودة إلى الإعلام والأنشطة")
+            }
+        }
+        item {
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                    Text(activity.category, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(activity.title, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp, lineHeight = 31.sp)
                     Text(formatDate(activity.createdAt), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                    Text(activity.content, lineHeight = 23.sp)
+                    activity.author?.fullName?.let {
+                        Text("نشر بواسطة: $it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    }
                 }
             }
         }
-        if (items.isEmpty()) item { EmptyState("لا توجد منشورات حاليًا") }
+        if (activity.assets.isNotEmpty()) {
+            item { Text("الوسائط", fontWeight = FontWeight.Bold, fontSize = 18.sp) }
+            items(activity.assets, key = { it.id }) { asset ->
+                OutlinedButton(
+                    onClick = { openPublicUrl(context, asset.url) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Outlined.OpenInNew, contentDescription = null)
+                    Text(
+                        when (asset.kind) {
+                            "VIDEO" -> "فتح الفيديو — ${asset.fileName}"
+                            else -> "فتح الصورة — ${asset.fileName}"
+                        },
+                    )
+                }
+            }
+        } else {
+            activity.imageUrl?.let { legacy ->
+                item {
+                    OutlinedButton(
+                        onClick = { openPublicUrl(context, legacy) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Outlined.OpenInNew, contentDescription = null)
+                        Text("فتح الصورة")
+                    }
+                }
+            }
+        }
     }
 }
 

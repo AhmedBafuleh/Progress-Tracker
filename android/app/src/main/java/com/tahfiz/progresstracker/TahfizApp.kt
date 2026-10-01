@@ -377,27 +377,39 @@ private fun AuthenticatedApp(
                             .fillMaxWidth()
                             .weight(1f),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp),
+                        contentPadding = PaddingValues(vertical = 6.dp),
                     ) {
-                        items(sections, key = { it.name }) { section ->
-                            NavigationDrawerItem(
-                                label = { Text(section.label, fontWeight = if (selected == section) FontWeight.Bold else FontWeight.Medium) },
-                                icon = { Icon(section.icon, contentDescription = null) },
-                                selected = selected == section,
-                                onClick = {
-                                    selected = section
-                                    scope.launch { drawerState.close() }
-                                },
-                                colors = NavigationDrawerItemDefaults.colors(
-                                    selectedContainerColor = BrandPurple.copy(alpha = .9f),
-                                    selectedIconColor = Color.White,
-                                    selectedTextColor = Color.White,
-                                    unselectedContainerColor = Color.Transparent,
-                                    unselectedIconColor = Color.White.copy(alpha = .72f),
-                                    unselectedTextColor = Color.White.copy(alpha = .82f),
-                                ),
-                                shape = RoundedCornerShape(14.dp),
-                            )
+                        val groupedSections = sections.groupBy { mobileSectionGroup(user.role, it) }
+                        groupedSections.forEach { (group, groupSections) ->
+                            item(key = "heading-$group") {
+                                Text(
+                                    group,
+                                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 3.dp),
+                                    color = Color.White.copy(alpha = .48f),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            items(groupSections, key = { it.name }) { section ->
+                                NavigationDrawerItem(
+                                    label = { Text(section.label, fontWeight = if (selected == section) FontWeight.Bold else FontWeight.Medium) },
+                                    icon = { Icon(section.icon, contentDescription = null) },
+                                    selected = selected == section,
+                                    onClick = {
+                                        selected = section
+                                        scope.launch { drawerState.close() }
+                                    },
+                                    colors = NavigationDrawerItemDefaults.colors(
+                                        selectedContainerColor = BrandPurple.copy(alpha = .9f),
+                                        selectedIconColor = Color.White,
+                                        selectedTextColor = Color.White,
+                                        unselectedContainerColor = Color.Transparent,
+                                        unselectedIconColor = Color.White.copy(alpha = .72f),
+                                        unselectedTextColor = Color.White.copy(alpha = .82f),
+                                    ),
+                                    shape = RoundedCornerShape(14.dp),
+                                )
+                            }
                         }
                     }
 

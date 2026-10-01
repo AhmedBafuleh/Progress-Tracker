@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import {
   api,
   clearToken,
@@ -66,7 +66,7 @@ function accountPrefix(role: CreatableRole) {
 
 type ManagementTab = 'overview' | 'users' | 'halaqahs' | 'parents' | 'record' | 'tests' | 'notes' | 'leaves' | 'notifications' | 'library' | 'media' | 'home' | 'schedule' | 'reports' | 'ai';
 
-type NavItem<T extends string> = { id: T; label: string; icon: IconName };
+type NavItem<T extends string> = { id: T; label: string; icon: IconName; group?: string };
 
 function routeForRole(role: Role) {
   if (role === 'ADMIN') return '/admin';
@@ -202,7 +202,7 @@ function LibraryPage({ user }: { user: SessionUser | null }) {
   );
 }
 
-function MediaSlideshow({ item }: { item: Activity }) {
+function MediaSlideshow({ item, compact = false }: { item: Activity; compact?: boolean }) {
   const assets = item.assets?.length
     ? item.assets
     : item.imageUrl
@@ -223,11 +223,11 @@ function MediaSlideshow({ item }: { item: Activity }) {
   return (
     <div className="media-slideshow">
       {active.kind === 'VIDEO' ? (
-        <video className="media-image" src={url} controls preload="metadata" />
+        <video className="media-image" src={url} controls={!compact} muted={compact} preload="metadata" />
       ) : (
         <img className="media-image" src={url} alt={item.title} />
       )}
-      {assets.length > 1 && (
+      {!compact && assets.length > 1 && (
         <>
           <button
             type="button"
@@ -276,15 +276,60 @@ function MediaPage({ user }: { user: SessionUser | null }) {
       <section className="content-container media-grid">
         {loading && <EmptyState title="جارٍ تحميل المحتوى" />}
         {!loading && activities.length === 0 && <EmptyState title="لا توجد منشورات حاليًا" />}
-        {activities.map((item) => (
-          <article className="media-card" key={item.id}>
+        {activities.map((item) => {
+          const summary = item.content.length > 180 ? item.content.slice(0, 180).trimEnd() + '…' : item.content;
+          return (
+            <Link className="media-card media-card-link" key={item.id} to={'/media/' + item.id}>
+              <MediaSlideshow item={item} compact />
+              <small>{item.category}</small>
+              <h3>{item.title}</h3>
+              <p className="media-card-summary">{summary}</p>
+              <div className="media-card-footer">
+                <span className="media-read-more">عرض التفاصيل</span>
+                <span className="media-meta">{formatDate(item.createdAt)}</span>
+              </div>
+            </Link>
+          );
+        })}
+      </section>
+    </PublicLayout>
+  );
+}
+
+function MediaDetailsPage({ user }: { user: SessionUser | null }) {
+  const { id } = useParams<{ id: string }>();
+  const [item, setItem] = useState<Activity | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    void api.getPublicMedia()
+      .then((result) => {
+        if (active) setItem(result.activities.find((activity) => activity.id === id) ?? null);
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [id]);
+
+  return (
+    <PublicLayout user={user}>
+      <section className="content-container media-detail-container">
+        <Link className="media-back-link" to="/media"><Icon name="chevronRight" size={18} />العودة إلى الإعلام والأنشطة</Link>
+        {loading && <EmptyState title="جارٍ تحميل المنشور" />}
+        {!loading && !item && <EmptyState title="المنشور غير موجود أو غير منشور" />}
+        {item && (
+          <article className="media-detail-card">
             <MediaSlideshow item={item} />
-            <small>{item.category}</small>
-            <h3>{item.title}</h3>
-            <p>{item.content}</p>
-            <div className="media-meta">{formatDate(item.createdAt)}</div>
+            <div className="media-detail-body">
+              <div className="media-detail-heading">
+                <div><small>{item.category}</small><h1>{item.title}</h1></div>
+                <span>{formatDate(item.createdAt)}</span>
+              </div>
+              <p className="media-detail-content">{item.content}</p>
+              {item.author?.fullName && <div className="media-detail-author">نشر بواسطة: <strong>{item.author.fullName}</strong></div>}
+            </div>
           </article>
-        ))}
+        )}
       </section>
     </PublicLayout>
   );
@@ -372,10 +417,15 @@ function DashboardShell<T extends string>({
       <aside className="admin-sidebar">
         <Link className="brand admin-brand" to="/" title="الذهاب إلى الموقع العام"><BrandLogo /><div><strong>مركز التحفيظ</strong><span>{title}</span></div></Link>
         <nav>
-          {nav.map((item) => (
-            <button key={item.id} className={active === item.id ? 'active' : ''} onClick={() => onChange(item.id)}>
-              <Icon name={item.icon} size={19} /><span>{item.label}</span>
-            </button>
+          {Array.from(new Set(nav.map((item) => item.group || ''))).map((group) => (
+            <div className="sidebar-nav-group" key={group || 'main'}>
+              {group && <div className="sidebar-nav-heading">{group}</div>}
+              {nav.filter((item) => (item.group || '') === group).map((item) => (
+                <button key={item.id} className={active === item.id ? 'active' : ''} onClick={() => onChange(item.id)}>
+                  <Icon name={item.icon} size={19} /><span>{item.label}</span>
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
         <button className="sidebar-logout" onClick={onLogout}><Icon name="logout" size={18} /><span>تسجيل الخروج</span></button>
@@ -426,27 +476,30 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
 
   const nav = useMemo<NavItem<ManagementTab>[]>(() => {
     const items: NavItem<ManagementTab>[] = [
-      { id: 'overview', label: 'نظرة عامة', icon: 'home' },
-      { id: 'users', label: 'إدارة المستخدمين', icon: 'users' },
+      { id: 'overview', label: 'نظرة عامة', icon: 'home', group: 'الرئيسية' },
+      { id: 'users', label: 'إدارة المستخدمين', icon: 'users', group: 'إدارة المركز' },
     ];
     if (isAdmin) {
       items.push(
-        { id: 'halaqahs', label: 'الحلقات', icon: 'school' },
-        { id: 'record', label: 'تسجيل المتابعة', icon: 'edit' },
-        { id: 'tests', label: 'الاختبارات الشهرية', icon: 'check' },
+        { id: 'halaqahs', label: 'الحلقات', icon: 'school', group: 'إدارة المركز' },
+        { id: 'record', label: 'تسجيل المتابعة', icon: 'edit', group: 'المتابعة الأكاديمية' },
+        { id: 'tests', label: 'الاختبارات الشهرية', icon: 'check', group: 'المتابعة الأكاديمية' },
       );
     }
     items.push(
-      { id: 'parents', label: 'ربط أولياء الأمور', icon: 'link' },
-      { id: 'notes', label: isAdmin ? 'ملاحظات الموظفين' : 'ملاحظات الطلاب', icon: 'file' },
-      { id: 'leaves', label: 'الإجازات', icon: 'clock' },
-      { id: 'notifications', label: 'إشعارات الطلاب', icon: 'bell' },
-      { id: 'library', label: 'المكتبة', icon: 'book' },
-      { id: 'media', label: 'الإعلام والأنشطة', icon: 'media' },
+      { id: 'parents', label: 'ربط أولياء الأمور', icon: 'link', group: 'إدارة المركز' },
+      { id: 'notes', label: isAdmin ? 'ملاحظات الموظفين' : 'ملاحظات الطلاب', icon: 'file', group: 'المتابعة الأكاديمية' },
+      { id: 'leaves', label: 'الإجازات', icon: 'clock', group: 'المتابعة الأكاديمية' },
+      { id: 'notifications', label: 'إشعارات الطلاب', icon: 'bell', group: 'المتابعة الأكاديمية' },
+      { id: 'library', label: 'المكتبة', icon: 'book', group: 'المحتوى' },
+      { id: 'media', label: 'الإعلام والأنشطة', icon: 'media', group: 'المحتوى' },
     );
-    if (isAdmin) items.push({ id: 'home', label: 'الصفحة الرئيسية', icon: 'home' });
-    items.push({ id: 'schedule', label: 'الفترات', icon: 'clock' }, { id: 'reports', label: 'التقارير', icon: 'chart' });
-    if (isAdmin) items.push({ id: 'ai', label: 'المساعد الذكي', icon: 'sparkles' });
+    if (isAdmin) items.push({ id: 'home', label: 'الصفحة الرئيسية', icon: 'home', group: 'المحتوى' });
+    items.push(
+      { id: 'schedule', label: 'الفترات', icon: 'clock', group: 'إدارة المركز' },
+      { id: 'reports', label: 'التقارير', icon: 'chart', group: 'التقارير والتحليل' },
+    );
+    if (isAdmin) items.push({ id: 'ai', label: 'المساعد الذكي', icon: 'sparkles', group: 'التقارير والتحليل' });
     return items;
   }, [isAdmin]);
 
@@ -714,48 +767,63 @@ function ParentLinksManager({ users, links, onChanged, onError }: { users: Manag
 }
 
 function LibraryManager({ items, onChanged, onError }: { items: LibraryItem[]; onChanged: (m: string) => void; onError: (m: string) => void }) {
+  const typeOptions = [
+    { value: 'PDF', label: 'PDF' },
+    { value: 'WORD', label: 'Word' },
+    { value: 'EXCEL', label: 'Excel' },
+    { value: 'POWERPOINT', label: 'PowerPoint' },
+    { value: 'IMAGE', label: 'صورة' },
+    { value: 'TEXT', label: 'ملف نصي' },
+    { value: 'OTHER', label: 'نوع آخر' },
+  ];
   const [editing, setEditing] = useState<LibraryItem | null>(null);
   const [form, setForm] = useState({ title: '', description: '', type: 'PDF', url: '', published: true });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   function clear() {
     setEditing(null);
     setForm({ title: '', description: '', type: 'PDF', url: '', published: true });
+    setSelectedFile(null);
     setDragging(false);
   }
 
   function edit(item: LibraryItem) {
     setEditing(item);
     setForm({ title: item.title, description: item.description || '', type: item.type, url: item.url, published: item.published });
+    setSelectedFile(null);
   }
 
-  async function uploadFile(file: File) {
-    setUploading(true);
-    try {
-      const result = await api.uploadLibraryFile(file);
-      setForm((current) => ({
-        ...current,
-        title: current.title || result.file.fileName.replace(/\.[^.]+$/, ''),
-        type: result.file.type || current.type,
-        url: result.file.url,
-      }));
-      onChanged('تم رفع الملف. أكمل بيانات المادة ثم اضغط حفظ.');
-    } catch (err) {
-      onError(err instanceof Error ? err.message : 'تعذر رفع الملف');
-    } finally {
-      setUploading(false);
-    }
+  function chooseFile(file: File) {
+    setSelectedFile(file);
+    setForm((current) => ({
+      ...current,
+      title: current.title || file.name.replace(/\.[^.]+$/, ''),
+    }));
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    setSaving(true);
     try {
-      const result = editing ? await api.updateLibraryItem(editing.id, form) : await api.createLibraryItem(form);
+      let url = form.url.trim();
+      if (selectedFile) {
+        const upload = await api.uploadLibraryFile(selectedFile);
+        url = upload.file.url;
+      }
+      if (!url) {
+        onError('ارفع ملفًا أو أدخل رابطًا للمادة قبل الحفظ.');
+        return;
+      }
+      const payload = { ...form, url };
+      const result = editing ? await api.updateLibraryItem(editing.id, payload) : await api.createLibraryItem(payload);
       clear();
       onChanged(result.message);
     } catch (err) {
       onError(err instanceof Error ? err.message : 'تعذر حفظ المادة');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -773,7 +841,11 @@ function LibraryManager({ items, onChanged, onError }: { items: LibraryItem[]; o
       <div className="panel-heading"><div><span>المكتبة</span><h2>{editing ? 'تعديل مادة' : 'إضافة مادة جديدة'}</h2></div>{editing && <button type="button" className="text-button" onClick={clear}>إلغاء التعديل</button>}</div>
       <form className="user-form" onSubmit={submit}>
         <label>العنوان<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
-        <label>النوع<input value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} placeholder="PDF" required /></label>
+        <label>النوع
+          <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+            {typeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
         <div className="span-2 media-upload-field">
           <span className="field-label">رفع ملف من الهاتف أو الكمبيوتر</span>
           <label
@@ -785,19 +857,20 @@ function LibraryManager({ items, onChanged, onError }: { items: LibraryItem[]; o
               e.preventDefault();
               setDragging(false);
               const file = e.dataTransfer.files[0];
-              if (file) void uploadFile(file);
+              if (file) chooseFile(file);
             }}
           >
-            <input className="file-input" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadFile(file); e.currentTarget.value = ''; }} />
+            <input className="file-input" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) chooseFile(file); e.currentTarget.value = ''; }} />
             <Icon name="file" size={32} />
-            <strong>{uploading ? 'جارٍ رفع الملف...' : 'اسحب الملف هنا أو اضغط للاختيار'}</strong>
-            <span>PDF وWord وPowerPoint وExcel والنصوص والصور</span>
+            <strong>{selectedFile ? selectedFile.name : 'اسحب الملف هنا أو اضغط للاختيار'}</strong>
+            <span>{selectedFile ? 'سيتم رفع الملف فقط عند الضغط على زر الحفظ.' : 'PDF وWord وPowerPoint وExcel والنصوص والصور'}</span>
           </label>
+          {selectedFile && <div className="selected-library-file"><span>{selectedFile.name}</span><small>{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</small><button type="button" className="text-button" onClick={() => setSelectedFile(null)}>إزالة</button></div>}
         </div>
-        <label className="span-2">رابط الملف أو المادة<input dir="ltr" type="text" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="يُملأ تلقائيًا عند الرفع، أو ضع رابطًا خارجيًا" required /><small className="field-help">يمكنك رفع الملف مباشرة أعلاه أو استخدام رابط خارجي.</small></label>
+        <label className="span-2">رابط الملف أو المادة<input dir="ltr" type="text" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="اختياري عند رفع ملف، أو ضع رابطًا خارجيًا" /><small className="field-help">إذا اخترت ملفًا أعلاه، سيُرفع الملف عند الضغط على إضافة إلى المكتبة ويُستخدم رابطه تلقائيًا.</small></label>
         <label className="span-2">الوصف<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
         <label className="check-field span-2"><input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} />منشور للزوار</label>
-        <div className="form-actions"><button className="primary-button" disabled={uploading}>{editing ? 'حفظ التعديلات' : 'إضافة إلى المكتبة'}</button></div>
+        <div className="form-actions"><button className="primary-button" disabled={saving}>{saving ? 'جارٍ الحفظ...' : editing ? 'حفظ التعديلات' : 'إضافة إلى المكتبة'}</button></div>
       </form>
     </section>
     <section className="admin-panel">
@@ -1218,6 +1291,7 @@ export default function App() {
       <Route path="/" element={<HomePage user={user} />} />
       <Route path="/library" element={<LibraryPage user={user} />} />
       <Route path="/media" element={<MediaPage user={user} />} />
+      <Route path="/media/:id" element={<MediaDetailsPage user={user} />} />
       <Route path="/login" element={<LoginPage user={user} onLogin={setUser} />} />
       <Route path="/admin" element={<ManagementDashboard user={user} onLogout={logout} mode="ADMIN" />} />
       <Route path="/manager" element={<ManagementDashboard user={user} onLogout={logout} mode="MANAGER" />} />

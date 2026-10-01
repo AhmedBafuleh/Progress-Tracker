@@ -179,6 +179,7 @@ fun LibraryScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
     pendingFile?.let { file ->
         var title by remember(file) { mutableStateOf(file.fileName.substringBeforeLast('.')) }
         var description by remember(file) { mutableStateOf("") }
+        var type by remember(file) { mutableStateOf("PDF") }
         var published by remember(file) { mutableStateOf(true) }
         AlertDialog(
             onDismissRequest = { pendingFile = null },
@@ -187,6 +188,12 @@ fun LibraryScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(file.fileName, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("العنوان") })
+                    SelectionField(
+                        "النوع",
+                        libraryTypeLabel(type),
+                        libraryTypeOptions(),
+                        { type = it },
+                    )
                     OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text("الوصف") }, minLines = 2)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("منشور", modifier = Modifier.padding(top = 8.dp))
@@ -204,6 +211,7 @@ fun LibraryScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                             file.fileName,
                             title.trim(),
                             description.ifBlank { null },
+                            type,
                             published,
                         )
                         pendingFile = null
@@ -234,7 +242,12 @@ private fun LibraryItemDialog(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("العنوان") })
                 OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text("الوصف") }, minLines = 2)
-                OutlinedTextField(type, { type = it }, Modifier.fillMaxWidth(), label = { Text("النوع") })
+                SelectionField(
+                    "النوع",
+                    libraryTypeLabel(type),
+                    libraryTypeOptions(),
+                    { type = it },
+                )
                 OutlinedTextField(url, { url = it }, Modifier.fillMaxWidth(), label = { Text("الرابط") })
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("منشور", modifier = Modifier.padding(top = 8.dp))
