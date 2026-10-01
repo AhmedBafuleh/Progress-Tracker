@@ -49,9 +49,9 @@ fun ProgressRecorderScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
     var periodId by remember(state.periods) { mutableStateOf(state.periods.firstOrNull()?.id.orEmpty()) }
     var attended by remember { mutableStateOf(true) }
     var recordType by remember { mutableStateOf("HIFZ") }
-    var surah by remember { mutableStateOf("") }
+    var surah by remember { mutableStateOf("الفاتحة") }
     var verseFrom by remember { mutableStateOf("1") }
-    var endSurah by remember { mutableStateOf("") }
+    var endSurah by remember { mutableStateOf("الفاتحة") }
     var verseTo by remember { mutableStateOf("1") }
     var matnName by remember { mutableStateOf("") }
     var matnFrom by remember { mutableStateOf("") }
@@ -130,15 +130,55 @@ fun ProgressRecorderScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                 }
             } else {
                 item {
+                    val maxAyah = ayahCountForSurah(surah)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(surah, { surah = it }, Modifier.weight(1f), label = { Text("السورة") })
-                        OutlinedTextField(verseFrom, { verseFrom = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("من آية") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                        SelectionField(
+                            "السورة",
+                            surah,
+                            quranSurahOptions(),
+                            {
+                                surah = it
+                                val max = ayahCountForSurah(it)
+                                verseFrom = (verseFrom.toIntOrNull() ?: 1).coerceIn(1, max).toString()
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            verseFrom,
+                            { value ->
+                                val digits = value.filter(Char::isDigit)
+                                verseFrom = if (digits.isBlank()) "" else (digits.toIntOrNull() ?: 1).coerceIn(1, maxAyah).toString()
+                            },
+                            Modifier.weight(1f),
+                            label = { Text("من آية (1-$maxAyah)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
                     }
                 }
                 item {
+                    val maxAyah = ayahCountForSurah(endSurah)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(endSurah, { endSurah = it }, Modifier.weight(1f), label = { Text("السورة إلى") }, placeholder = { Text("نفس السورة") })
-                        OutlinedTextField(verseTo, { verseTo = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("إلى آية") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                        SelectionField(
+                            "السورة إلى",
+                            endSurah,
+                            quranSurahOptions(),
+                            {
+                                endSurah = it
+                                val max = ayahCountForSurah(it)
+                                verseTo = (verseTo.toIntOrNull() ?: 1).coerceIn(1, max).toString()
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            verseTo,
+                            { value ->
+                                val digits = value.filter(Char::isDigit)
+                                verseTo = if (digits.isBlank()) "" else (digits.toIntOrNull() ?: 1).coerceIn(1, maxAyah).toString()
+                            },
+                            Modifier.weight(1f),
+                            label = { Text("إلى آية (1-$maxAyah)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
                     }
                 }
             }
