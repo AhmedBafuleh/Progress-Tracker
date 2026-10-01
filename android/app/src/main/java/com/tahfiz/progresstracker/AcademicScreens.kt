@@ -619,7 +619,7 @@ fun LeavesScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                             when (leave.status) { "APPROVED" -> true; "REJECTED" -> false; else -> null },
                         )
                     }
-                    Text("${formatDate(leave.fromDate)} — ${formatDate(leave.toDate ?: leave.fromDate)}")
+                    Text(if (leave.type == "DAY_OFF") formatDate(leave.fromDate) else "${formatDate(leave.fromDate)} — ${formatDate(leave.toDate ?: leave.fromDate)}")
                     leave.reason?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
                     leave.reviewNote?.let { Text("ملاحظة الإدارة: $it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
                     if (isAdmin && leave.status == "PENDING") {
@@ -635,26 +635,77 @@ fun LeavesScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
     }
 
     if (showCreate) {
-        var type by remember { mutableStateOf("VACATION") }
+        var type by remember { mutableStateOf("DAY_OFF") }
         var from by remember { mutableStateOf(todayIso()) }
-        var to by remember { mutableStateOf(todayIso()) }
+        var to by remember { mutableStateOf(tomorrowIso()) }
         var reason by remember { mutableStateOf("") }
+
+        val fromValid = isDateOnOrAfter(from, todayIso())
+        val toValid = type == "DAY_OFF" || (isDateOnOrAfter(to, tomorrowIso(from)) && to != from)
+        val reasonValid = reason.trim().length >= 3
+
         AlertDialog(
             onDismissRequest = { showCreate = false },
             title = { Text("طلب إجازة") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SelectionField("النوع", statusLabel(type), listOf("VACATION" to "إجازة", "DAY_OFF" to "يوم إجازة"), { type = it })
-                    OutlinedTextField(from, { from = it }, Modifier.fillMaxWidth(), label = { Text("من YYYY-MM-DD") })
-                    OutlinedTextField(to, { to = it }, Modifier.fillMaxWidth(), label = { Text("إلى YYYY-MM-DD") })
-                    OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text("السبب") }, minLines = 3)
+                    SelectionField(
+                        "النوع",
+                        statusLabel(type),
+                        listOf("DAY_OFF" to "يوم إجازة", "VACATION" to "إجازة"),
+                        { selected ->
+                            type = selected
+                            to = if (selected == "VACATION") tomorrowIso(from) else from
+                        },
+                    )
+                    OutlinedTextField(
+                        from,
+                        { value ->
+                            from = value
+                            if (type == "DAY_OFF") {
+                                to = value
+                            } else if (value.length == 10 && (!isDateOnOrAfter(to, tomorrowIso(value)) || to == value)) {
+                                to = tomorrowIso(value)
+                            }
+                        },
+                        Modifier.fillMaxWidth(),
+                        label = { Text(if (type == "DAY_OFF") "التاريخ YYYY-MM-DD" else "من YYYY-MM-DD") },
+                        supportingText = { Text("اليوم أو تاريخ لاحق فقط") },
+                    )
+                    if (type == "VACATION") {
+                        OutlinedTextField(
+                            to,
+                            { to = it },
+                            Modifier.fillMaxWidth(),
+                            label = { Text("إلى YYYY-MM-DD") },
+                            supportingText = { Text("اليوم التالي على الأقل: ${tomorrowIso(from)}") },
+                        )
+                    }
+                    OutlinedTextField(
+                        reason,
+                        { reason = it },
+                        Modifier.fillMaxWidth(),
+                        label = { Text("السبب *") },
+                        supportingText = { Text("السبب مطلوب") },
+                        minLines = 3,
+                    )
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.createLeave(CreateLeaveRequest(type, from, to, reason.ifBlank { null }))
-                    showCreate = false
-                }) { Text("إرسال") }
+                TextButton(
+                    enabled = fromValid && toValid && reasonValid,
+                    onClick = {
+                        viewModel.createLeave(
+                            CreateLeaveRequest(
+                                type = type,
+                                fromDate = from,
+                                toDate = if (type == "DAY_OFF") from else to,
+                                reason = reason.trim(),
+                            ),
+                        )
+                        showCreate = false
+                    },
+                ) { Text("إرسال") }
             },
             dismissButton = { TextButton(onClick = { showCreate = false }) { Text("إلغاء") } },
         )
