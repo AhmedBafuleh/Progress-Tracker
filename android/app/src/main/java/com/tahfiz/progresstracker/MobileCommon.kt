@@ -185,6 +185,51 @@ fun roleLabel(role: String): String = when (role) {
     else -> role
 }
 
+fun libraryTypeOptions(): List<Pair<String, String>> = listOf(
+    "PDF" to "PDF",
+    "WORD" to "Word",
+    "EXCEL" to "Excel",
+    "POWERPOINT" to "PowerPoint",
+    "IMAGE" to "صورة",
+    "TEXT" to "ملف نصي",
+    "OTHER" to "نوع آخر",
+)
+
+fun libraryTypeLabel(type: String): String =
+    libraryTypeOptions().firstOrNull { it.first == type }?.second ?: type
+
+fun mobileSectionGroup(role: String, section: MobileSection): String = when {
+    section == MobileSection.OVERVIEW -> "الرئيسية"
+    role == "ADMIN" && section in setOf(
+        MobileSection.USERS,
+        MobileSection.HALAQAHS,
+        MobileSection.PARENT_LINKS,
+        MobileSection.PERIODS,
+    ) -> "إدارة المركز"
+    role == "MANAGER" && section in setOf(
+        MobileSection.USERS,
+        MobileSection.PARENT_LINKS,
+        MobileSection.PERIODS,
+    ) -> "إدارة المركز"
+    section in setOf(
+        MobileSection.RECORD,
+        MobileSection.STUDENTS,
+        MobileSection.HISTORY,
+        MobileSection.TESTS,
+        MobileSection.NOTES,
+        MobileSection.LEAVES,
+        MobileSection.NOTIFICATIONS,
+        MobileSection.CHILDREN,
+    ) -> "المتابعة الأكاديمية"
+    section in setOf(
+        MobileSection.LIBRARY,
+        MobileSection.MEDIA,
+        MobileSection.HOME_EDITOR,
+    ) -> "المحتوى"
+    section in setOf(MobileSection.REPORTS, MobileSection.AI) -> "التقارير والتحليل"
+    else -> "أخرى"
+}
+
 fun recordTypeLabel(type: String?): String = when (type) {
     "HIFZ" -> "حفظ"
     "NEAR_REVIEW" -> "مراجعة قريب"
