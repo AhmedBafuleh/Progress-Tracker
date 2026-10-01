@@ -31,8 +31,8 @@ async function findStudentByUser(userId: string) {
 // Leave / day-off requests
 const leaveSchema = z.object({
   type: z.enum(['VACATION', 'DAY_OFF']),
-  fromDate: z.string().min(8),
-  toDate: z.string().min(8).optional().nullable(),
+  fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'صيغة التاريخ غير صحيحة'),
+  toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'صيغة التاريخ غير صحيحة').optional().nullable(),
   reason: z.string().trim().min(3, 'يجب كتابة سبب الطلب').max(1000),
 });
 
