@@ -46,11 +46,15 @@ export function DateField({
   onChange,
   required = false,
   placeholder = 'DD-MM-YY',
+  min,
+  max,
 }: {
   value: string;
   onChange: (value: string) => void;
   required?: boolean;
   placeholder?: string;
+  min?: string;
+  max?: string;
 }) {
   const [display, setDisplay] = useState(() => isoToDisplay(value));
   const lastEmitted = useRef(value);
@@ -104,6 +108,8 @@ export function DateField({
         tabIndex={-1}
         aria-hidden="true"
         value={value || ''}
+        min={min}
+        max={max}
         onChange={(event) => {
           const next = event.target.value;
           lastEmitted.current = next;
