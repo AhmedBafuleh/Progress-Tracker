@@ -135,10 +135,13 @@ input:focus, select:focus, textarea:focus { border-color: #557662; box-shadow: 0
 .admin-sidebar nav button.active { color: #fff; background: rgba(255,255,255,.11); }
 .sidebar-logout { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 9px; background: transparent; color: #d7e3db; border: 1px solid rgba(255,255,255,.15); padding: 11px; border-radius: 9px; }
 .admin-main { padding: 36px 42px 70px; min-width: 0; }
-.dashboard-top-nav { display: flex; align-items: center; gap: 30px; margin: -8px 0 28px; padding: 14px 18px; border: 1px solid #e3e9e4; border-radius: 14px; background: #fff; box-shadow: 0 6px 20px rgba(35,76,53,.04); }
+.dashboard-top-nav { display: flex; align-items: center; justify-content: space-between; gap: 30px; margin: -8px 0 28px; padding: 12px 16px; border: 1px solid #e3e9e4; border-radius: 14px; background: #fff; box-shadow: 0 6px 20px rgba(35,76,53,.04); }
+.dashboard-public-links { display: flex; align-items: center; gap: 30px; }
 .dashboard-top-nav a { color: #55645b; text-decoration: none; font-size: 14px; font-weight: 800; transition: color .16s ease, background .16s ease; padding: 7px 2px; }
 .dashboard-top-nav a:hover { color: #234c35; }
 .dashboard-top-nav a:focus-visible { outline: 3px solid rgba(116,16,100,.16); outline-offset: 4px; border-radius: 6px; }
+.dashboard-logout { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #e7d7df; background: #fff; color: #741064; padding: 8px 12px; border-radius: 10px; font-weight: 800; white-space: nowrap; }
+.dashboard-logout:hover { background: #fbf5f9; }
 .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
 .admin-header span { color: #7a857d; font-size: 13px; }
 .admin-header h1 { margin: 4px 0; font-size: 28px; }
@@ -1064,6 +1067,8 @@ input:focus, select:focus, textarea:focus {
 
 
 @media (max-width: 760px) {
-  .dashboard-top-nav { gap: 16px; overflow-x: auto; white-space: nowrap; padding: 12px 14px; }
+  .dashboard-top-nav { gap: 14px; overflow-x: auto; white-space: nowrap; padding: 10px 12px; }
+  .dashboard-public-links { gap: 16px; }
   .dashboard-top-nav a { font-size: 13px; }
+  .dashboard-logout { font-size: 12px; padding: 7px 9px; }
 }
