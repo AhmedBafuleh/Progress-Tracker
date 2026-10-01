@@ -431,6 +431,11 @@ function DashboardShell<T extends string>({
         <button className="sidebar-logout" onClick={onLogout}><Icon name="logout" size={18} /><span>تسجيل الخروج</span></button>
       </aside>
       <main className="admin-main">
+        <nav className="dashboard-top-nav" aria-label="روابط الموقع العامة">
+          <Link to="/">الرئيسية</Link>
+          <Link to="/library">المكتبة</Link>
+          <Link to="/media">الإعلام والأنشطة</Link>
+        </nav>
         <div className="admin-header">
           <div><span>{roleLabels[user.role]}</span><h1>{user.fullName}</h1><small dir="ltr">{user.loginId}</small></div>
           <div className="admin-header-actions">{headerAction}<div className="admin-avatar">{user.fullName.trim().charAt(0) || 'ق'}</div></div>
