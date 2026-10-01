@@ -481,6 +481,15 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (!notice && !error) return;
+    const timeout = window.setTimeout(() => {
+      setNotice('');
+      setError('');
+    }, 4500);
+    return () => window.clearTimeout(timeout);
+  }, [notice, error]);
+
   const isAdmin = mode === 'ADMIN';
 
   const nav = useMemo<NavItem<ManagementTab>[]>(() => {
