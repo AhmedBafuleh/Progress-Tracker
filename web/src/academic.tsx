@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { api, type Halaqah, type HalaqahReport, type LeaveRequest, type MonthlyTest, type MonthlyTestQuestion, type NoteViolation, type SessionUser, type StudentNotification, type StudentOption } from './api';
 import { Icon } from './icons';
 import { DateField, DateTimeField } from './dateFields';
-import { QURAN_SURAHS, ayahCountForSurah, findSurah } from './quran';
+import { QURAN_SURAHS, ayahCountForSurah } from './quran';
 
 const recordTypeLabels: Record<string, string> = { HIFZ: 'حفظ', NEAR_REVIEW: 'مراجعة قريب', FAR_REVIEW: 'مراجعة بعيد', MATN: 'متن' };
 const testTypeLabels: Record<string, string> = { HIFZ: 'حفظ', REVIEW: 'مراجعة', MATN: 'متن' };
