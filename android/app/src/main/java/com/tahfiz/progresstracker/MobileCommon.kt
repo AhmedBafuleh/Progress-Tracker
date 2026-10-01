@@ -271,6 +271,8 @@ fun formatDate(value: String?): String {
 }
 
 fun todayIso(): String = LocalDate.now().toString()
+fun tomorrowIso(from: String = todayIso()): String = runCatching { LocalDate.parse(from).plusDays(1).toString() }.getOrDefault(LocalDate.now().plusDays(1).toString())
+fun isDateOnOrAfter(value: String, minimum: String): Boolean = runCatching { !LocalDate.parse(value).isBefore(LocalDate.parse(minimum)) }.getOrDefault(false)
 fun daysAgoIso(days: Long): String = LocalDate.now().minusDays(days).toString()
 
 @Composable
