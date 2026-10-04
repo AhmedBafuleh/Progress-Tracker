@@ -60,6 +60,10 @@ const librarySchema = z.object({
     (value) => /^https?:\/\//i.test(value) || value.startsWith('/uploads/library/'),
     'الرابط غير صالح',
   ),
+  coverUrl: z.string().trim().max(1200).refine(
+    (value) => /^https?:\/\//i.test(value) || value.startsWith('/uploads/library/'),
+    'رابط الغلاف غير صالح',
+  ).optional().nullable(),
   published: z.boolean().default(true),
 });
 
