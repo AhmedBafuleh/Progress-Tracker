@@ -1,123 +1,61 @@
-# Local Prototype Setup
+# Local Setup — PHP + MySQL
 
-## 1. Prerequisites
+## Requirements
 
-Install:
-
-- Node.js 20+
-- npm
-- PostgreSQL
+- PHP 8.2+ with PDO MySQL and OpenSSL
+- MySQL 8+
+- Node.js 20+ / npm
 - Git
 
-## 2. Check out the feature branch
+## Backend
+
+1. Create a MySQL database named `progress_tracker`.
+2. Import `backend/database/schema.sql`.
+3. Copy `backend/.env.php.example` to `backend/.env.php`.
+4. Configure the MySQL host, database, username and password.
+5. Set a long random `JWT_SECRET`.
+6. Set `PASSWORD_ENCRYPTION_KEY` to exactly 64 hexadecimal characters.
+7. Run:
 
 ```bash
-git fetch origin
-git switch feature/prototype-foundation
+php backend/database/seed.php
+php -S 127.0.0.1:4000 backend/router.php
 ```
 
-## 3. Configure PostgreSQL
-
-Create a local PostgreSQL database named `progress_tracker`.
-
-Example connection string:
+Health check:
 
 ```text
-postgresql://postgres:postgres@localhost:5432/progress_tracker?schema=public
+http://127.0.0.1:4000/api/health
 ```
 
-Use your own PostgreSQL username/password if they differ.
-
-## 4. Backend setup
-
-```bash
-cd backend
-npm install
-```
-
-Copy `.env.example` to `.env` and replace `DATABASE_URL` and `JWT_SECRET` with local values.
-
-PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Generate the Prisma client and create the initial database migration:
-
-```bash
-npx prisma generate
-npx prisma migrate dev --name init
-npm run prisma:seed
-```
-
-Start the API:
-
-```bash
-npm run dev
-```
-
-Expected health endpoint:
-
-```text
-http://localhost:4000/api/health
-```
-
-Expected development Admin credentials from the seed template:
-
-```text
-ID: ADMIN001
-Password: ChangeMe123!
-```
-
-These credentials are development-only and should be changed before any deployment.
-
-## 5. Web setup
-
-Open a second terminal:
+## Web
 
 ```bash
 cd web
 npm install
-```
-
-Copy `.env.example` to `.env`:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Start Vite:
-
-```bash
 npm run dev
 ```
 
-Open:
+The existing React API client remains compatible with the PHP backend.
 
-```text
-http://localhost:5173
-```
+## Production / university server
 
-## 6. Prototype verification checklist
+- PHP document root: `backend/public`
+- MySQL database: import `backend/database/schema.sql`
+- Keep `.env.php` private.
+- Enable `pdo_mysql` and `openssl`.
+- Apache: `mod_rewrite` should be enabled for the included `.htaccess`.
+- Set `WEB_ORIGIN` to the deployed frontend origin.
 
-1. Public homepage loads in Arabic and RTL.
-2. Library page is accessible without login.
-3. Media/activities page is accessible without login.
-4. `ADMIN001` can log in and reaches the Admin dashboard.
-5. Admin can create a Halaqah.
-6. Admin can create Manager, Teacher, Student, and Parent accounts.
-7. Creating a Student requires Halaqah, building, and room.
-8. Newly created accounts appear in the Admin list.
-9. A non-Admin account can authenticate successfully.
-10. A non-Admin account is redirected to **لوحة التحكم قيد التطوير**.
+## Verification checklist
 
-## 7. Branch policy
-
-Do not develop directly on `main`.
-
-```text
-feature/* -> development -> main
-```
-
-Run the local verification checklist before requesting merge into `development`.
+1. `GET /api/health` returns `status: ok`.
+2. Admin can log in.
+3. Admin/Manager can manage allowed accounts.
+4. Teacher only sees assigned Halaqah students.
+5. Student only sees their own progress.
+6. Parent only sees linked children.
+7. Library and media uploads are written under `backend/public/uploads`.
+8. Reports and monthly tests load.
+9. Notifications work.
+10. Web and Android clients authenticate against the PHP endpoint.
