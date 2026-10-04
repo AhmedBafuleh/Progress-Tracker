@@ -179,25 +179,95 @@ function HomePage({ user }: { user: SessionUser | null }) {
 function LibraryPage({ user }: { user: SessionUser | null }) {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<LibraryItem | null>(null);
 
   useEffect(() => {
     void api.getPublicLibrary().then((result) => setItems(result.items)).finally(() => setLoading(false));
   }, []);
 
+  async function downloadItem(item: LibraryItem) {
+    const url = resolveMediaUrl(item.url);
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('download failed');
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const extensionMatch = item.url.match(/\.([a-z0-9]{2,8})(?:\?|$)/i);
+      const safeTitle = item.title.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'material';
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = extensionMatch ? `${safeTitle}.${extensionMatch[1]}` : safeTitle;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
   return (
     <PublicLayout user={user}>
-      <section className="page-hero"><span>المكتبة</span><h1>مراجع ومواد تعليمية</h1><p>المواد المرجعية المعتمدة والمتاحة لزوار المركز.</p></section>
-      <section className="content-container card-list">
-        {loading && <EmptyState title="جارٍ تحميل المكتبة" />}
-        {!loading && items.length === 0 && <EmptyState title="لا توجد مواد منشورة حاليًا" />}
-        {items.map((item) => (
-          <article className="document-card" key={item.id}>
-            <div className="pdf-badge"><Icon name="file" size={23} /></div>
-            <div><h3>{item.title}</h3><p>{item.description || 'مادة تعليمية'}</p><small>{item.type}</small></div>
-            <a className="secondary-button compact-button" href={resolveMediaUrl(item.url)} target="_blank" rel="noreferrer">فتح المادة</a>
-          </article>
-        ))}
+      <section className="page-hero"><span>المكتبة</span><h1>مراجع ومواد تعليمية</h1><p>تصفح الكتب والملفات التعليمية، ثم افتح المادة للقراءة أو نزّلها مباشرة.</p></section>
+      <section className="library-browse-section">
+        <div className="library-grid">
+          {loading && <EmptyState title="جارٍ تحميل المكتبة" />}
+          {!loading && items.length === 0 && <EmptyState title="لا توجد مواد منشورة حاليًا" />}
+          {items.map((item) => (
+            <button className="library-book-card" key={item.id} type="button" onClick={() => setSelected(item)}>
+              <div className="library-cover">
+                {item.coverUrl
+                  ? <img src={resolveMediaUrl(item.coverUrl)} alt={`غلاف ${item.title}`} />
+                  : <div className="library-cover-placeholder"><Icon name="book" size={42} /><span>{item.title}</span></div>}
+              </div>
+              <div className="library-card-copy">
+                <h3>{item.title}</h3>
+                <span>{item.type}</span>
+              </div>
+            </button>
+          ))}
+        </div>
       </section>
+
+      {selected && (
+        <Modal
+          title={selected.title}
+          onClose={() => setSelected(null)}
+          footer={
+            <div className="library-modal-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void downloadItem(selected)}
+              >
+                <Icon name="download" size={17} />تنزيل المادة
+              </button>
+              <a
+                className="primary-button"
+                href={resolveMediaUrl(selected.url)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Icon name="eye" size={17} />فتح للقراءة
+              </a>
+            </div>
+          }
+        >
+          <div className="library-modal-content">
+            <div className="library-modal-cover">
+              {selected.coverUrl
+                ? <img src={resolveMediaUrl(selected.coverUrl)} alt={`غلاف ${selected.title}`} />
+                : <div className="library-cover-placeholder"><Icon name="book" size={52} /><span>{selected.title}</span></div>}
+            </div>
+            <div className="library-modal-details">
+              <span className="library-type-chip">{selected.type}</span>
+              <h3>{selected.title}</h3>
+              <p>{selected.description || 'لا يوجد وصف إضافي لهذه المادة.'}</p>
+              <small>أضيفت في {formatDate(selected.createdAt)}</small>
+            </div>
+          </div>
+        </Modal>
+      )}
     </PublicLayout>
   );
 }
@@ -272,25 +342,26 @@ function MediaPage({ user }: { user: SessionUser | null }) {
 
   return (
     <PublicLayout user={user}>
-      <section className="page-hero"><span>الإعلام والأنشطة</span><h1>آخر أخبار المركز وأنشطته</h1><p>الإعلانات والفعاليات والأنشطة المنشورة للزوار.</p></section>
-      <section className="content-container media-grid">
-        {loading && <EmptyState title="جارٍ تحميل المحتوى" />}
-        {!loading && activities.length === 0 && <EmptyState title="لا توجد منشورات حاليًا" />}
-        {activities.map((item) => {
-          const summary = item.content.length > 180 ? item.content.slice(0, 180).trimEnd() + '…' : item.content;
-          return (
-            <Link className="media-card media-card-link" key={item.id} to={'/media/' + item.id}>
-              <MediaSlideshow item={item} compact />
-              <small>{item.category}</small>
-              <h3>{item.title}</h3>
-              <p className="media-card-summary">{summary}</p>
-              <div className="media-card-footer">
-                <span className="media-read-more">عرض التفاصيل</span>
-                <span className="media-meta">{formatDate(item.createdAt)}</span>
-              </div>
-            </Link>
-          );
-        })}
+      <section className="page-hero"><span>الإعلام والأنشطة</span><h1>آخر أخبار المركز وأنشطته</h1><p>أخبار المركز، الإعلانات، الفعاليات والأنشطة المنشورة للزوار.</p></section>
+      <section className="media-browse-section">
+        <div className="media-grid">
+          {loading && <EmptyState title="جارٍ تحميل المحتوى" />}
+          {!loading && activities.length === 0 && <EmptyState title="لا توجد منشورات حاليًا" />}
+          {activities.map((item) => {
+            const summary = item.content.length > 120 ? item.content.slice(0, 120).trimEnd() + '…' : item.content;
+            return (
+              <Link className="media-card media-card-link" key={item.id} to={'/media/' + item.id}>
+                <MediaSlideshow item={item} compact />
+                <div className="media-card-body">
+                  <div className="media-card-kicker"><span>{item.category}</span><time>{formatDate(item.createdAt)}</time></div>
+                  <h3>{item.title}</h3>
+                  <p className="media-card-summary">{summary}</p>
+                  <span className="media-read-more">قراءة الخبر</span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </section>
     </PublicLayout>
   );
@@ -299,13 +370,17 @@ function MediaPage({ user }: { user: SessionUser | null }) {
 function MediaDetailsPage({ user }: { user: SessionUser | null }) {
   const { id } = useParams<{ id: string }>();
   const [item, setItem] = useState<Activity | null>(null);
+  const [related, setRelated] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     void api.getPublicMedia()
       .then((result) => {
-        if (active) setItem(result.activities.find((activity) => activity.id === id) ?? null);
+        if (!active) return;
+        const current = result.activities.find((activity) => activity.id === id) ?? null;
+        setItem(current);
+        setRelated(result.activities.filter((activity) => activity.id !== id).slice(0, 4));
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -313,22 +388,45 @@ function MediaDetailsPage({ user }: { user: SessionUser | null }) {
 
   return (
     <PublicLayout user={user}>
-      <section className="content-container media-detail-container">
-        <Link className="media-back-link" to="/media"><Icon name="chevronRight" size={18} />العودة إلى الإعلام والأنشطة</Link>
+      <section className="news-page-shell">
         {loading && <EmptyState title="جارٍ تحميل المنشور" />}
         {!loading && !item && <EmptyState title="المنشور غير موجود أو غير منشور" />}
         {item && (
-          <article className="media-detail-card">
-            <MediaSlideshow item={item} />
-            <div className="media-detail-body">
-              <div className="media-detail-heading">
-                <div><small>{item.category}</small><h1>{item.title}</h1></div>
-                <span>{formatDate(item.createdAt)}</span>
-              </div>
-              <p className="media-detail-content">{item.content}</p>
-              {item.author?.fullName && <div className="media-detail-author">نشر بواسطة: <strong>{item.author.fullName}</strong></div>}
+          <>
+            <div className="news-breadcrumbs">
+              <Link to="/">الرئيسية</Link><span>/</span><Link to="/media">الإعلام والأنشطة</Link><span>/</span><strong>{item.category}</strong>
             </div>
-          </article>
+            <div className="news-layout">
+              <article className="news-article">
+                <div className="news-article-header">
+                  <span className="news-category">{item.category}</span>
+                  <h1>{item.title}</h1>
+                  <div className="news-meta">
+                    <time>{formatDate(item.createdAt)}</time>
+                    {item.author?.fullName && <span>نشر بواسطة {item.author.fullName}</span>}
+                  </div>
+                </div>
+                <div className="news-hero-media"><MediaSlideshow item={item} /></div>
+                <div className="news-article-body">
+                  <p>{item.content}</p>
+                </div>
+              </article>
+
+              <aside className="news-sidebar">
+                <h2>آخر الأخبار</h2>
+                {related.length === 0 && <p className="news-sidebar-empty">لا توجد أخبار أخرى حاليًا.</p>}
+                {related.map((post) => (
+                  <Link className="news-side-card" key={post.id} to={'/media/' + post.id}>
+                    <div>
+                      <span>{post.category}</span>
+                      <strong>{post.title}</strong>
+                      <small>{formatDate(post.createdAt)}</small>
+                    </div>
+                  </Link>
+                ))}
+              </aside>
+            </div>
+          </>
         )}
       </section>
     </PublicLayout>
@@ -574,16 +672,24 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
             <StatCard label="الحسابات النشطة" value={activeUsers} />
             <StatCard label="الطلاب" value={studentUsers} />
             <StatCard label="الحلقات" value={halaqahs.length} />
-            <StatCard label="سجلات المتابعة" value={progress.length} />
+            <StatCard label={isAdmin ? 'سجلات المتابعة' : 'مواد المكتبة'} value={isAdmin ? progress.length : library.length} />
           </div>
           <section className="admin-panel dashboard-welcome">
-            <div><span className="eyebrow">ملخص النظام</span><h2>الإدارة اليومية من مكان واحد</h2><p>انتقل من القائمة لإدارة الحسابات والمحتوى والربط والفترات والتقارير.</p></div>
-            <div className="summary-ring"><strong>{avg.toFixed(1)}</strong><span>متوسط التقييم / 5</span></div>
+            <div>
+              <span className="eyebrow">ملخص النظام</span>
+              <h2>الإدارة اليومية من مكان واحد</h2>
+              <p>{isAdmin ? 'انتقل من القائمة لإدارة الحسابات والمتابعة والمحتوى والتقارير.' : 'انتقل من القائمة لإدارة الحسابات والمحتوى والربط والفترات ضمن صلاحيات المشرف.'}</p>
+            </div>
+            {isAdmin
+              ? <div className="summary-ring"><strong>{avg.toFixed(1)}</strong><span>متوسط التقييم / 5</span></div>
+              : <div className="summary-ring"><strong>{library.length + media.length}</strong><span>مواد ومنشورات</span></div>}
           </section>
-          <section className="admin-panel">
-            <div className="panel-heading"><div><span>آخر المتابعة</span><h2>أحدث سجلات الطلاب</h2></div></div>
-            <ProgressTable entries={progress.slice(0, 6)} compact />
-          </section>
+          {isAdmin && (
+            <section className="admin-panel">
+              <div className="panel-heading"><div><span>آخر المتابعة</span><h2>أحدث سجلات الطلاب</h2></div></div>
+              <ProgressTable entries={progress.slice(0, 6)} compact />
+            </section>
+          )}
         </>
       )}
       {!loading && active === 'users' && <UsersManager users={users} halaqahs={halaqahs} isAdmin={isAdmin} onChanged={flash} onError={fail} />}
@@ -795,22 +901,32 @@ function LibraryManager({ items, onChanged, onError }: { items: LibraryItem[]; o
     { value: 'OTHER', label: 'نوع آخر' },
   ];
   const [editing, setEditing] = useState<LibraryItem | null>(null);
-  const [form, setForm] = useState({ title: '', description: '', type: 'PDF', url: '', published: true });
+  const [form, setForm] = useState({ title: '', description: '', type: 'PDF', url: '', coverUrl: '', published: true });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedCover, setSelectedCover] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [saving, setSaving] = useState(false);
 
   function clear() {
     setEditing(null);
-    setForm({ title: '', description: '', type: 'PDF', url: '', published: true });
+    setForm({ title: '', description: '', type: 'PDF', url: '', coverUrl: '', published: true });
     setSelectedFile(null);
+    setSelectedCover(null);
     setDragging(false);
   }
 
   function edit(item: LibraryItem) {
     setEditing(item);
-    setForm({ title: item.title, description: item.description || '', type: item.type, url: item.url, published: item.published });
+    setForm({
+      title: item.title,
+      description: item.description || '',
+      type: item.type,
+      url: item.url,
+      coverUrl: item.coverUrl || '',
+      published: item.published,
+    });
     setSelectedFile(null);
+    setSelectedCover(null);
   }
 
   function chooseFile(file: File) {
@@ -826,15 +942,22 @@ function LibraryManager({ items, onChanged, onError }: { items: LibraryItem[]; o
     setSaving(true);
     try {
       let url = form.url.trim();
+      let coverUrl: string | null = form.coverUrl.trim() || null;
+
       if (selectedFile) {
         const upload = await api.uploadLibraryFile(selectedFile);
         url = upload.file.url;
+      }
+      if (selectedCover) {
+        const upload = await api.uploadLibraryFile(selectedCover);
+        coverUrl = upload.file.url;
       }
       if (!url) {
         onError('ارفع ملفًا أو أدخل رابطًا للمادة قبل الحفظ.');
         return;
       }
-      const payload = { ...form, url };
+
+      const payload = { ...form, url, coverUrl };
       const result = editing ? await api.updateLibraryItem(editing.id, payload) : await api.createLibraryItem(payload);
       clear();
       onChanged(result.message);
@@ -864,8 +987,9 @@ function LibraryManager({ items, onChanged, onError }: { items: LibraryItem[]; o
             {typeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </label>
+
         <div className="span-2 media-upload-field">
-          <span className="field-label">رفع ملف من الهاتف أو الكمبيوتر</span>
+          <span className="field-label">ملف المادة</span>
           <label
             className={`media-dropzone ${dragging ? 'dragging' : ''}`}
             onDragEnter={(e) => { e.preventDefault(); setDragging(true); }}
@@ -881,19 +1005,51 @@ function LibraryManager({ items, onChanged, onError }: { items: LibraryItem[]; o
             <input className="file-input" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) chooseFile(file); e.currentTarget.value = ''; }} />
             <Icon name="file" size={32} />
             <strong>{selectedFile ? selectedFile.name : 'اسحب الملف هنا أو اضغط للاختيار'}</strong>
-            <span>{selectedFile ? 'سيتم رفع الملف فقط عند الضغط على زر الحفظ.' : 'PDF وWord وPowerPoint وExcel والنصوص والصور'}</span>
+            <span>{selectedFile ? 'سيتم رفع الملف عند حفظ المادة.' : 'PDF وWord وPowerPoint وExcel والنصوص والصور'}</span>
           </label>
           {selectedFile && <div className="selected-library-file"><span>{selectedFile.name}</span><small>{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</small><button type="button" className="text-button" onClick={() => setSelectedFile(null)}>إزالة</button></div>}
         </div>
-        <label className="span-2">رابط الملف أو المادة<input dir="ltr" type="text" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="اختياري عند رفع ملف، أو ضع رابطًا خارجيًا" /><small className="field-help">إذا اخترت ملفًا أعلاه، سيُرفع الملف عند الضغط على إضافة إلى المكتبة ويُستخدم رابطه تلقائيًا.</small></label>
+
+        <div className="span-2 library-cover-editor">
+          <span className="field-label">صورة غلاف المادة</span>
+          <div className="library-cover-editor-row">
+            <label className="library-cover-upload">
+              <input className="file-input" type="file" accept="image/*" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setSelectedCover(file);
+                e.currentTarget.value = '';
+              }} />
+              <Icon name="media" size={24} />
+              <strong>{selectedCover ? selectedCover.name : 'اختر صورة الغلاف'}</strong>
+              <span>يفضل صورة عمودية واضحة للكتاب أو المادة.</span>
+            </label>
+            {(selectedCover || form.coverUrl) && (
+              <div className="library-cover-current">
+                {selectedCover
+                  ? <div className="library-cover-file-name"><Icon name="check" /><span>{selectedCover.name}</span></div>
+                  : <img src={resolveMediaUrl(form.coverUrl)} alt="الغلاف الحالي" />}
+                <button type="button" className="text-button" onClick={() => { setSelectedCover(null); setForm((current) => ({ ...current, coverUrl: '' })); }}>إزالة الغلاف</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <label className="span-2">رابط الملف أو المادة<input dir="ltr" type="text" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="اختياري عند رفع ملف، أو ضع رابطًا خارجيًا" /></label>
         <label className="span-2">الوصف<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
         <label className="check-field span-2"><input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} />منشور للزوار</label>
         <div className="form-actions"><button className="primary-button" disabled={saving}>{saving ? 'جارٍ الحفظ...' : editing ? 'حفظ التعديلات' : 'إضافة إلى المكتبة'}</button></div>
       </form>
     </section>
+
     <section className="admin-panel">
       <div className="panel-heading"><div><span>المواد</span><h2>محتوى المكتبة</h2></div></div>
-      <div className="item-list">{items.map((item) => <div className="item-row" key={item.id}><div className="card-icon"><Icon name="file" /></div><div className="item-main"><strong>{item.title}</strong><span>{item.type} • {item.published ? 'منشور' : 'مخفي'}</span></div><div className="table-actions"><button className="table-action" onClick={() => edit(item)}><Icon name="edit" /></button><button className="table-action danger" onClick={() => void remove(item)}><Icon name="trash" /></button></div></div>)}</div>
+      <div className="item-list">{items.map((item) => <div className="item-row" key={item.id}>
+        <div className="library-admin-thumb">
+          {item.coverUrl ? <img src={resolveMediaUrl(item.coverUrl)} alt="" /> : <Icon name="book" />}
+        </div>
+        <div className="item-main"><strong>{item.title}</strong><span>{item.type} • {item.published ? 'منشور' : 'مخفي'}</span></div>
+        <div className="table-actions"><button className="table-action" onClick={() => edit(item)}><Icon name="edit" /></button><button className="table-action danger" onClick={() => void remove(item)}><Icon name="trash" /></button></div>
+      </div>)}</div>
       {items.length === 0 && <EmptyState title="المكتبة فارغة" />}
     </section>
   </>;

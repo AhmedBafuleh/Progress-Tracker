@@ -121,6 +121,7 @@ export type LibraryItem = {
   description?: string | null;
   type: string;
   url: string;
+  coverUrl?: string | null;
   published: boolean;
   createdAt: string;
   updatedAt: string;

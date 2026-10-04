@@ -217,6 +217,7 @@ model LibraryItem {
   description String?
   type        String   @default("PDF")
   url         String
+  coverUrl    String?  @map("cover_url")
   published   Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
