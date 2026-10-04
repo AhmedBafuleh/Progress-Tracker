@@ -23,20 +23,10 @@ const addDays = (value: string, days: number) => {
 };
 
 function SurahInput({ value, onChange, required = false, placeholder }: { value: string; onChange: (value: string) => void; required?: boolean; placeholder?: string }) {
-  return <input
-    list="quran-surah-options"
-    value={value}
-    onChange={(event) => onChange(event.target.value)}
-    required={required}
-    placeholder={placeholder}
-    autoComplete="off"
-  />;
-}
-
-function QuranSurahOptions() {
-  return <datalist id="quran-surah-options">
+  return <select value={value} onChange={(event) => onChange(event.target.value)} required={required}>
+    <option value="">{placeholder || 'اختر السورة'}</option>
     {QURAN_SURAHS.map((surah) => <option key={surah.number} value={surah.name}>{surah.number}. {surah.name}</option>)}
-  </datalist>;
+  </select>;
 }
 const messageOf = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
 
@@ -90,7 +80,6 @@ export function DailyProgressRecorder({ user, onSaved }: { user: SessionUser; on
 
   if (loading) return <div className="loading-panel">جارٍ تحميل بيانات المتابعة...</div>;
   return <section className="admin-panel">
-    <QuranSurahOptions />
     <div className="panel-heading"><div><span>{user.role === 'ADMIN' ? 'متابعة جميع الطلاب' : 'الحلقات المسندة إليك'}</span><h2>تسجيل المتابعة اليومية</h2></div><p>اختر الحلقة أولًا ثم الطالب وسجّل الحضور ونوع المتابعة.</p></div>
     {notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
     {students.length === 0 ? <div className="empty-state"><strong>لا يوجد طلاب متاحون للتسجيل</strong></div> : <form className="record-form" onSubmit={submit}>
@@ -132,7 +121,6 @@ export function LeaveRequestsPanel({ user }: { user: SessionUser }) {
   const initialFrom = today();
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [form, setForm] = useState({ type: 'DAY_OFF', fromDate: initialFrom, toDate: addDays(initialFrom, 1), reason: '' });
-  const [reviewNote, setReviewNote] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -190,10 +178,9 @@ export function LeaveRequestsPanel({ user }: { user: SessionUser }) {
 
   async function review(id: string, status: 'APPROVED' | 'REJECTED') {
     try {
-      const result = await api.reviewLeaveRequest(id, { status, reviewNote: reviewNote || null });
+      const result = await api.reviewLeaveRequest(id, { status, reviewNote: null });
       setNotice(result.message);
       setError('');
-      setReviewNote('');
       await refresh();
     } catch (err) {
       setError(messageOf(err, 'تعذر تحديث الطلب'));
@@ -240,7 +227,6 @@ export function LeaveRequestsPanel({ user }: { user: SessionUser }) {
     </section>
     <section className="admin-panel">
       <div className="panel-heading"><div><span>{user.role === 'ADMIN' ? 'جميع الطلبات' : 'طلباتي'}</span><h2>سجل الإجازات</h2></div></div>
-      {user.role === 'ADMIN' && <label className="review-note-field">ملاحظة قرار الإدارة<input value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} placeholder="اختياري" /></label>}
       <div className="table-wrap"><table><thead><tr><th>صاحب الطلب</th><th>النوع</th><th>الفترة</th><th>الحالة</th><th>السبب</th>{user.role === 'ADMIN' && <th>القرار</th>}</tr></thead><tbody>{requests.map((r) => <tr key={r.id}><td>{r.requester.fullName}</td><td>{r.type === 'VACATION' ? 'إجازة' : 'يوم راحة'}</td><td>{r.type === 'DAY_OFF' ? new Date(r.fromDate).toLocaleDateString('ar-SA') : `${new Date(r.fromDate).toLocaleDateString('ar-SA')} — ${new Date(r.toDate || r.fromDate).toLocaleDateString('ar-SA')}`}</td><td><span className="status-chip">{r.status === 'PENDING' ? 'قيد المراجعة' : r.status === 'APPROVED' ? 'مقبول' : 'مرفوض'}</span></td><td>{r.reason || '—'}</td>{user.role === 'ADMIN' && <td>{r.status === 'PENDING' ? <div className="table-actions"><button className="table-action" onClick={() => void review(r.id, 'APPROVED')}><Icon name="check" /></button><button className="table-action danger" onClick={() => void review(r.id, 'REJECTED')}>×</button></div> : 'تمت المراجعة'}</td>}</tr>)}</tbody></table></div>
       {requests.length === 0 && <div className="empty-state"><strong>لا توجد طلبات</strong></div>}
     </section>
@@ -289,7 +275,6 @@ export function MonthlyTestsPanel({ user }: { user: SessionUser }) {
   function removeQuestion(index: number) { setQuestions((current) => current.filter((_, i) => i !== index).map((q, i) => ({ ...q, questionNumber: i + 1 }))); }
   async function submit(event: FormEvent) { event.preventDefault(); try { const result = await api.createMonthlyTest({ ...form, questions }); setNotice(result.message); setQuestions([{ questionNumber: 1, correct: true, surah: 'الفاتحة', ayah: 1, ayahTo: 1, referenceText: '' }]); setForm((current) => ({ ...current, note: '', matnName: '' })); await refresh(); } catch (err) { setError(messageOf(err, 'تعذر حفظ الاختبار')); } }
   return <>
-    <QuranSurahOptions />
     <section className="admin-panel"><div className="panel-heading"><div><span>التقييم الشهري</span><h2>اختبار شهري جديد</h2></div><div className="test-score-preview"><strong>{scorePreview}</strong><span>/100</span></div></div>{notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
       {students.length ? <form onSubmit={submit}><div className="record-row monthly-test-header"><label>الحلقة<select value={form.halaqahId} onChange={(e) => chooseHalaqah(e.target.value)}>{halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label><label>الطالب<select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>{filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.user.fullName}</option>)}</select></label><label>نوع الاختبار<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="HIFZ">حفظ</option><option value="REVIEW">مراجعة</option><option value="MATN">متن</option></select></label><label>التاريخ<DateField value={form.testDate} onChange={(value) => setForm({ ...form, testDate: value })} required /></label></div>
         {form.type === 'MATN' && <label className="standalone-field">اسم المتن<input value={form.matnName} onChange={(e) => setForm({ ...form, matnName: e.target.value })} required /></label>}
