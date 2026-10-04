@@ -5,6 +5,8 @@ node_modules/
 .env
 .env.*
 !.env.example
+!.env.php.example
+backend/.env.php
 
 # Build output
 dist/
@@ -23,7 +25,7 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Prisma / local databases
+# Local databases
 *.db
 *.db-journal
 
@@ -33,4 +35,4 @@ local.properties
 **/build/
 
 # User-uploaded local media
-backend/uploads/
+backend/public/uploads/
