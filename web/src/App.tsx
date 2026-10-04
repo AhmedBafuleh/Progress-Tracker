@@ -185,6 +185,27 @@ function LibraryPage({ user }: { user: SessionUser | null }) {
     void api.getPublicLibrary().then((result) => setItems(result.items)).finally(() => setLoading(false));
   }, []);
 
+  async function downloadItem(item: LibraryItem) {
+    const url = resolveMediaUrl(item.url);
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('download failed');
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const extensionMatch = item.url.match(/\.([a-z0-9]{2,8})(?:\?|$)/i);
+      const safeTitle = item.title.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'material';
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = extensionMatch ? `${safeTitle}.${extensionMatch[1]}` : safeTitle;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
   return (
     <PublicLayout user={user}>
       <section className="page-hero"><span>المكتبة</span><h1>مراجع ومواد تعليمية</h1><p>تصفح الكتب والملفات التعليمية، ثم افتح المادة للقراءة أو نزّلها مباشرة.</p></section>
@@ -214,13 +235,13 @@ function LibraryPage({ user }: { user: SessionUser | null }) {
           onClose={() => setSelected(null)}
           footer={
             <div className="library-modal-actions">
-              <a
+              <button
                 className="secondary-button"
-                href={resolveMediaUrl(selected.url)}
-                download
+                type="button"
+                onClick={() => void downloadItem(selected)}
               >
                 <Icon name="download" size={17} />تنزيل المادة
-              </a>
+              </button>
               <a
                 className="primary-button"
                 href={resolveMediaUrl(selected.url)}
