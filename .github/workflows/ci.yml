@@ -56,6 +56,9 @@ jobs:
           JWT_SECRET: ci-secret-that-is-at-least-24-characters
           PASSWORD_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
           WEB_ORIGIN: http://localhost:5173
+          SEED_ADMIN_ID: ADMIN001
+          SEED_ADMIN_PASSWORD: 'ChangeMe123!'
+          SEED_ADMIN_NAME: CI Admin
         run: php backend/database/install.php
 
       - name: Smoke test PHP API
