@@ -47,15 +47,37 @@ jobs:
         run: find backend -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
       - name: Install MySQL schema and seed
-        env:
+        env: &php-env
           DB_HOST: 127.0.0.1
-          DB_PORT: 3306
+          DB_PORT: '3306'
           DB_DATABASE: progress_tracker
           DB_USERNAME: progress_tracker
           DB_PASSWORD: progress_tracker
           JWT_SECRET: ci-secret-that-is-at-least-24-characters
-          PASSWORD_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+          PASSWORD_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
+          WEB_ORIGIN: http://localhost:5173
         run: php backend/database/install.php
+
+      - name: Smoke test PHP API
+        env: *php-env
+        run: |
+          php -S 127.0.0.1:4000 -t backend/public backend/public/router.php >/tmp/progress-tracker-api.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:4000/api/health >/tmp/health.json; then
+              break
+            fi
+            sleep 1
+          done
+          cat /tmp/health.json
+          LOGIN=$(curl -fsS -H 'Content-Type: application/json' \
+            -d '{"loginId":"ADMIN001","password":"ChangeMe123!"}' \
+            http://127.0.0.1:4000/api/auth/login)
+          TOKEN=$(printf '%s' "$LOGIN" | php -r '$j=json_decode(stream_get_contents(STDIN),true); if(empty($j["token"])) exit(1); echo $j["token"];')
+          curl -fsS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:4000/api/auth/me
+          kill $SERVER_PID
+          trap - EXIT
 
       - name: Setup Node for web build
         uses: actions/setup-node@v4
