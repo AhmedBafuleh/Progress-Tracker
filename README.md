@@ -4,107 +4,107 @@
 
 ## Current implementation
 
-The web system now provides a complete role-based workflow backed by PostgreSQL and Prisma:
+The system provides a complete role-based workflow using **PHP 8.2+ and MySQL 8+** on the backend:
 
-- Arabic-first, right-to-left public website.
-- Editable Home page content.
-- Editable Library page.
-- Editable Media and Activities page.
+- Arabic-first, right-to-left React web application.
+- Kotlin + Jetpack Compose Android application.
 - Authentication for Admin, Manager, Teacher, Student, and Parent.
-- Admin and Manager account management with role restrictions.
-- Student Halaqah and dormitory assignment.
-- Halaqah creation and teacher assignment.
-- Parent-to-student linking.
-- Schedule-period management.
-- Teacher daily memorization-progress entry.
-- Student personal progress dashboard.
-- Parent child-progress dashboard.
-- Administrative reports and progress summaries.
-- Password reveal/reset workflow for authorized roles.
-- Account activation/deactivation and protected deletion.
-
-## Permissions
-
-| Capability | Admin | Manager | Teacher | Student | Parent |
-| --- | --- | --- | --- | --- | --- |
-| Manage users | Full non-Admin management | Teacher / Student / Parent | No | No | No |
-| Create Manager | Yes | No | No | No | No |
-| Edit Home page | Yes | No | No | No | No |
-| Edit Library | Yes | Yes | No | No | No |
-| Edit Media | Yes | Yes | No | No | No |
-| Manage Halaqahs | Yes | Assignment through student management | No | No | No |
-| Record progress | View/report | View/report | Yes | No | No |
-| View own progress | Full reports | Full reports | Assigned students | Yes | Linked children |
+- User, Halaqah, dormitory, parent-link, schedule, progress, test, report, leave, note, notification, library, media, and homepage workflows.
+- Local institutional AI analysis endpoint.
+- Server-side role-based authorization.
 
 ## Architecture
 
 ```text
-React Web Client (Arabic / RTL)
-            |
-            | HTTPS / JSON REST API
-            v
-Node.js + Express Application Layer
-            |
-            | Prisma ORM
-            v
-        PostgreSQL
+React Web Client / Android Client
+              |
+              | HTTPS / JSON REST API
+              v
+       PHP 8.2+ Application
+              |
+              | PDO / prepared SQL
+              v
+            MySQL 8+
 ```
 
-The Android application remains a separate Kotlin + Jetpack Compose client and will consume the same REST API without changing the backend architecture.
+The REST endpoint contract is intentionally kept compatible with the previous Node/Express backend so the web and Android clients do not need a full rewrite.
 
 ## Repository structure
 
 ```text
 Progress-Tracker/
-├── web/          React + Vite web application
-├── backend/      Node.js + Express REST API
-├── docs/         Architecture and engineering documentation
-├── dev.cmd       Starts backend and web locally on Windows
-├── .gitignore
-└── README.md
+├── web/                 React + Vite web application
+├── android/             Kotlin + Jetpack Compose application
+├── backend/
+│   ├── public/          PHP web root and uploaded media
+│   ├── src/             PHP API, auth and database layer
+│   ├── database/        MySQL schema and seed
+│   ├── .env.php.example
+│   └── router.php       PHP development router
+├── docs/
+└── dev.cmd
 ```
-
-## Core roles
-
-- `ADMIN` — full administrative access and Home/Library/Media content management.
-- `MANAGER` — user registration for Teacher/Student/Parent, student assignment, parent links, Library and Media management, and reports.
-- `TEACHER` — assigned-student access and daily memorization-progress recording.
-- `STUDENT` — personal memorization progress and history.
-- `PARENT` — linked child progress and history.
 
 ## Local development
 
 Requirements:
 
-- Node.js 20+
-- npm
-- PostgreSQL
+- PHP 8.2+ with `pdo_mysql` and `openssl`
+- MySQL 8+
+- Node.js 20+ and npm for the React web client
 - Git
 
-Never commit `.env` files. Copy the provided `.env.example` files to `.env` locally and replace development values as needed.
+### Database
 
-After pulling schema changes, run from `backend`:
+Create an empty MySQL database:
 
-```powershell
-npx.cmd prisma migrate dev --name full_system
-npx.cmd prisma generate
-npm.cmd run prisma:seed
+```sql
+CREATE DATABASE progress_tracker CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-To start backend and web together on Windows, run from the repository root:
+Import:
+
+```bash
+mysql -u root -p progress_tracker < backend/database/schema.sql
+```
+
+Copy `backend/.env.php.example` to `backend/.env.php`, set your MySQL credentials, JWT secret, and a 64-character hexadecimal password-encryption key.
+
+Then seed the initial Admin account and default periods:
+
+```bash
+php backend/database/seed.php
+```
+
+Development credentials default to `ADMIN001 / ChangeMe123!`; change them before deployment.
+
+### Run locally
+
+On Windows:
 
 ```powershell
 .\dev.cmd
 ```
 
-The backend is served at `http://localhost:4000` and the web client at `http://localhost:5173`.
+Or start the backend manually:
 
-## Build verification
+```bash
+cd backend
+php -S 127.0.0.1:4000 router.php
+```
 
-GitHub Actions runs backend and web build checks automatically on the feature, development, and main branches.
+The API is available at `http://127.0.0.1:4000/api/health` and Vite remains at `http://localhost:5173`.
+
+## University deployment
+
+Point the PHP virtual host/document root to **`backend/public`**. Apache can use the included `.htaccess`. For Nginx, route non-file API requests to `public/index.php`. Keep `backend/.env.php` outside public access.
+
+The React client can be built normally and configured with `VITE_API_URL=https://your-university-host/api`.
+
+## Branch workflow
 
 ```text
 feature/* → development → main
 ```
 
-Implementation is currently taking place on `feature/prototype-foundation`.
+The PHP/MySQL migration is implemented on `feature/php-mysql-backend` until verified.
