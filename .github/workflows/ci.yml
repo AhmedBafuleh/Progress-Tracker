@@ -7,9 +7,7 @@ concurrency:
 on:
   push:
     branches:
-      - feature/prototype-foundation
-      - feature/reporting-ai
-      - feature/android-full-parity
+      - feature/php-mysql-backend
       - development
       - main
   pull_request:
@@ -24,26 +22,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: pdo_mysql, openssl
+
+      - name: Lint PHP backend
+        run: find backend -name "*.php" -print0 | xargs -0 -n1 php -l
+
+      - name: Setup Node for web build
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            backend/package-lock.json
-            web/package-lock.json
-
-      - name: Install backend dependencies
-        working-directory: backend
-        run: npm ci
-
-      - name: Generate Prisma client
-        working-directory: backend
-        run: npx prisma generate
-
-      - name: Build backend
-        working-directory: backend
-        run: npm run build
+          cache-dependency-path: web/package-lock.json
 
       - name: Install web dependencies
         working-directory: web
