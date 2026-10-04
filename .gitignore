@@ -23,14 +23,19 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Prisma / local databases
+# Local databases / dumps
 *.db
 *.db-journal
+*.sql.gz
+*.dump
 
 # Android
 .gradle/
 local.properties
 **/build/
 
-# User-uploaded local media
-backend/uploads/
+# User-uploaded local media (keep directory placeholders)
+backend/public/uploads/library/*
+!backend/public/uploads/library/.gitkeep
+backend/public/uploads/media/*
+!backend/public/uploads/media/.gitkeep

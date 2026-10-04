@@ -1,123 +1,90 @@
-# Local Prototype Setup
+# Local Setup — PHP + MySQL
 
-## 1. Prerequisites
+## Prerequisites
 
-Install:
+Install PHP 8.2+ with `pdo_mysql`, `openssl`, and `mbstring`; MySQL 8.0+; Node.js 20+ and npm for the React web client; and Git. PHP `curl` is recommended only for the local-AI feature.
 
-- Node.js 20+
-- npm
-- PostgreSQL
-- Git
+## 1. Create MySQL database
 
-## 2. Check out the feature branch
+Example:
 
-```bash
-git fetch origin
-git switch feature/prototype-foundation
+```sql
+CREATE DATABASE progress_tracker CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'progress_tracker'@'localhost' IDENTIFIED BY 'change_this_password';
+GRANT ALL PRIVILEGES ON progress_tracker.* TO 'progress_tracker'@'localhost';
+FLUSH PRIVILEGES;
 ```
 
-## 3. Configure PostgreSQL
+Use the database credentials provided by the university if the server administrator creates the database for you.
 
-Create a local PostgreSQL database named `progress_tracker`.
+## 2. Configure backend
 
-Example connection string:
+Copy the example file:
+
+```powershell
+Copy-Item backend\.env.example backend\.env
+```
+
+At minimum set:
 
 ```text
-postgresql://postgres:postgres@localhost:5432/progress_tracker?schema=public
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=progress_tracker
+DB_USERNAME=progress_tracker
+DB_PASSWORD=...
+JWT_SECRET=...
+PASSWORD_ENCRYPTION_KEY=<64 random hexadecimal characters>
+WEB_ORIGIN=http://localhost:5173
 ```
 
-Use your own PostgreSQL username/password if they differ.
+A secure encryption key can be generated with PHP:
 
-## 4. Backend setup
+```bash
+php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
+```
+
+## 3. Install schema and seed
+
+```bash
+php backend/database/install.php
+```
+
+Development seed credentials default to `ADMIN001` / `ChangeMe123!` unless overridden in `.env`. Change the password before deployment.
+
+## 4. Start API
 
 ```bash
 cd backend
-npm install
+php -S 127.0.0.1:4000 -t public public/router.php
 ```
 
-Copy `.env.example` to `.env` and replace `DATABASE_URL` and `JWT_SECRET` with local values.
-
-PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Generate the Prisma client and create the initial database migration:
-
-```bash
-npx prisma generate
-npx prisma migrate dev --name init
-npm run prisma:seed
-```
-
-Start the API:
-
-```bash
-npm run dev
-```
-
-Expected health endpoint:
+Check:
 
 ```text
 http://localhost:4000/api/health
 ```
 
-Expected development Admin credentials from the seed template:
-
-```text
-ID: ADMIN001
-Password: ChangeMe123!
-```
-
-These credentials are development-only and should be changed before any deployment.
-
-## 5. Web setup
-
-Open a second terminal:
+## 5. Start web client
 
 ```bash
 cd web
 npm install
-```
-
-Copy `.env.example` to `.env`:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Start Vite:
-
-```bash
 npm run dev
 ```
 
-Open:
+`web/.env.example` points to `http://localhost:4000/api` by default.
 
-```text
-http://localhost:5173
+## 6. Windows shortcut
+
+After MySQL is running and both `.env` files are configured, run:
+
+```powershell
+.\dev.cmd
 ```
 
-## 6. Prototype verification checklist
+It opens the PHP API and Vite web client in separate terminals.
 
-1. Public homepage loads in Arabic and RTL.
-2. Library page is accessible without login.
-3. Media/activities page is accessible without login.
-4. `ADMIN001` can log in and reaches the Admin dashboard.
-5. Admin can create a Halaqah.
-6. Admin can create Manager, Teacher, Student, and Parent accounts.
-7. Creating a Student requires Halaqah, building, and room.
-8. Newly created accounts appear in the Admin list.
-9. A non-Admin account can authenticate successfully.
-10. A non-Admin account is redirected to **لوحة التحكم قيد التطوير**.
+## 7. Verification
 
-## 7. Branch policy
-
-Do not develop directly on `main`.
-
-```text
-feature/* -> development -> main
-```
-
-Run the local verification checklist before requesting merge into `development`.
+Verify login for each role, user/Halaqah management, Teacher progress entry, Student/Parent filtered history, monthly tests, notifications, Library/Media uploads, reports, and leave/note workflows. The AI panel is optional and depends on a configured local AI server.

@@ -1,110 +1,98 @@
 # Progress-Tracker
 
-نظام إدارة ومتابعة تحفيظ القرآن الكريم.
+نظام إدارة ومتابعة تحفيظ القرآن الكريم لمركز دار النور.
 
-## Current implementation
+## Current stack
 
-The web system now provides a complete role-based workflow backed by PostgreSQL and Prisma:
+The project is now aligned with a standard university PHP/MySQL hosting environment:
 
-- Arabic-first, right-to-left public website.
-- Editable Home page content.
-- Editable Library page.
-- Editable Media and Activities page.
-- Authentication for Admin, Manager, Teacher, Student, and Parent.
-- Admin and Manager account management with role restrictions.
-- Student Halaqah and dormitory assignment.
-- Halaqah creation and teacher assignment.
-- Parent-to-student linking.
-- Schedule-period management.
-- Teacher daily memorization-progress entry.
-- Student personal progress dashboard.
-- Parent child-progress dashboard.
-- Administrative reports and progress summaries.
-- Password reveal/reset workflow for authorized roles.
-- Account activation/deactivation and protected deletion.
-
-## Permissions
-
-| Capability | Admin | Manager | Teacher | Student | Parent |
-| --- | --- | --- | --- | --- | --- |
-| Manage users | Full non-Admin management | Teacher / Student / Parent | No | No | No |
-| Create Manager | Yes | No | No | No | No |
-| Edit Home page | Yes | No | No | No | No |
-| Edit Library | Yes | Yes | No | No | No |
-| Edit Media | Yes | Yes | No | No | No |
-| Manage Halaqahs | Yes | Assignment through student management | No | No | No |
-| Record progress | View/report | View/report | Yes | No | No |
-| View own progress | Full reports | Full reports | Assigned students | Yes | Linked children |
-
-## Architecture
+- **Web:** React + TypeScript + Vite (Arabic / RTL)
+- **API:** PHP 8.2+ REST API (no Node.js runtime required)
+- **Database:** MySQL 8.0+ through PDO
+- **Android:** Kotlin + Jetpack Compose using the same REST API
+- **Authentication:** bcrypt-compatible password hashes + HS256 JWT access tokens
 
 ```text
-React Web Client (Arabic / RTL)
-            |
-            | HTTPS / JSON REST API
-            v
-Node.js + Express Application Layer
-            |
-            | Prisma ORM
-            v
-        PostgreSQL
+React Web Client ─────┐
+                      │ HTTPS / JSON REST
+Android App ──────────┤
+                      ▼
+                 PHP REST API
+                      │ PDO
+                      ▼
+                    MySQL
 ```
 
-The Android application remains a separate Kotlin + Jetpack Compose client and will consume the same REST API without changing the backend architecture.
+The API contract remains `/api/...`, so the existing React and Android clients do not need a feature rewrite for this backend migration.
+
+## Core roles
+
+- `ADMIN` — full administration, Halaqahs, academic records, content, reports, and local AI analysis.
+- `MANAGER` — Teacher/Student/Parent account management, parent links, Library/Media, notifications, notes, and reports within role restrictions.
+- `TEACHER` — assigned-student access, daily progress, monthly tests, notes, reports, and leave requests.
+- `STUDENT` — personal progress, reports, notifications, and leave requests.
+- `PARENT` — linked-child progress and reports.
 
 ## Repository structure
 
 ```text
 Progress-Tracker/
-├── web/          React + Vite web application
-├── backend/      Node.js + Express REST API
-├── docs/         Architecture and engineering documentation
-├── dev.cmd       Starts backend and web locally on Windows
-├── .gitignore
-└── README.md
+├── web/                   React + Vite web application
+├── backend/
+│   ├── public/            PHP web root, front controller, uploads
+│   ├── src/               PHP API, auth, data access, route modules
+│   └── database/          MySQL schema, seed, installer, PostgreSQL migration tool
+├── android/               Kotlin + Jetpack Compose client
+├── docs/                  Architecture and deployment documentation
+└── dev.cmd                Starts PHP API + Vite locally on Windows
 ```
 
-## Core roles
+## Local requirements
 
-- `ADMIN` — full administrative access and Home/Library/Media content management.
-- `MANAGER` — user registration for Teacher/Student/Parent, student assignment, parent links, Library and Media management, and reports.
-- `TEACHER` — assigned-student access and daily memorization-progress recording.
-- `STUDENT` — personal memorization progress and history.
-- `PARENT` — linked child progress and history.
-
-## Local development
-
-Requirements:
-
-- Node.js 20+
-- npm
-- PostgreSQL
+- PHP 8.2+ with `pdo_mysql`, `openssl`, and `mbstring` (`curl` is recommended for the local-AI feature)
+- MySQL 8.0+
+- Node.js 20+ and npm **only for building/running the React web client**
 - Git
 
-Never commit `.env` files. Copy the provided `.env.example` files to `.env` locally and replace development values as needed.
+## Quick start
 
-After pulling schema changes, run from `backend`:
+1. Create a MySQL database and user.
+2. Copy `backend/.env.example` to `backend/.env` and set the database credentials and secrets.
+3. Install the schema and seed data:
 
-```powershell
-npx.cmd prisma migrate dev --name full_system
-npx.cmd prisma generate
-npm.cmd run prisma:seed
+```bash
+php backend/database/install.php
 ```
 
-To start backend and web together on Windows, run from the repository root:
+4. Start the PHP API:
 
-```powershell
-.\dev.cmd
+```bash
+cd backend
+php -S 127.0.0.1:4000 -t public public/router.php
 ```
 
-The backend is served at `http://localhost:4000` and the web client at `http://localhost:5173`.
+5. In another terminal, start the web client:
 
-## Build verification
+```bash
+cd web
+npm install
+npm run dev
+```
 
-GitHub Actions runs backend and web build checks automatically on the feature, development, and main branches.
+The API health endpoint is `http://localhost:4000/api/health`; the web client defaults to `http://localhost:5173`.
+
+For detailed setup and university-server deployment, see `docs/LOCAL_SETUP.md` and `docs/UNIVERSITY_DEPLOYMENT.md`. If existing PostgreSQL data must be retained, see `docs/MYSQL_MIGRATION.md`.
+
+## Security
+
+Never commit `.env` files. Production must use a long random `JWT_SECRET`, a random 32-byte `PASSWORD_ENCRYPTION_KEY` represented as 64 hex characters, HTTPS, and a non-default seeded Admin password.
+
+The password-reveal workflow remains compatible with the previous backend: normal login uses a bcrypt-compatible hash while the optional recoverable credential is AES-256-GCM encrypted.
+
+## Git workflow
 
 ```text
 feature/* → development → main
 ```
 
-Implementation is currently taking place on `feature/prototype-foundation`.
+GitHub Actions checks PHP syntax, the MySQL schema/seed, the React build, and the Android build.
