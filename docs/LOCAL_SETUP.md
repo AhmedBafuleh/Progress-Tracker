@@ -101,9 +101,10 @@ Open `http://127.0.0.1:4000/api/health`, then log into `http://localhost:5173`.
 ## 7. Security differences from the prototype
 
 - Authentication uses Laravel Sanctum.
-- Passwords are one-way hashed.
-- Existing passwords cannot be revealed by Admin or Manager.
-- Password reset revokes the user's existing API tokens.
+- Authentication passwords are one-way hashed.
+- The required password-view feature is isolated in a separate encrypted credential vault.
+- Credential reveal is restricted to authorized Admin/Manager account-management scope, rate-limited, non-cacheable, and audit-logged.
+- Password reset updates the hash and encrypted vault copy together and revokes the user's existing API tokens.
 - Account deletion is a soft delete so academic records remain intact.
 - Uploaded files are stored through Laravel's public storage disk with MIME and size validation.
 - Authorization is enforced server-side with role middleware plus row-level checks.
