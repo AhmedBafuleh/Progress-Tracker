@@ -2,104 +2,171 @@
 
 نظام إدارة ومتابعة تحفيظ القرآن الكريم.
 
-## Current implementation
+## Stack
 
-The system provides a complete role-based workflow using **PHP 8.2+ and MySQL 8+** on the backend:
+The application uses:
 
-- Arabic-first, right-to-left React web application.
-- Kotlin + Jetpack Compose Android application.
-- Authentication for Admin, Manager, Teacher, Student, and Parent.
-- User, Halaqah, dormitory, parent-link, schedule, progress, test, report, leave, note, notification, library, media, and homepage workflows.
-- Local institutional AI analysis endpoint.
-- Server-side role-based authorization.
-
-## Architecture
+- **Laravel 13 / PHP 8.3+** for the REST API.
+- **MySQL 8+** for persistent data.
+- **Laravel Sanctum** for bearer-token API authentication.
+- **Eloquent ORM + Laravel migrations** for the data layer.
+- React + TypeScript + Vite for the Arabic/RTL web client.
+- Kotlin + Jetpack Compose for Android.
 
 ```text
-React Web Client / Android Client
-              |
-              | HTTPS / JSON REST API
-              v
-       PHP 8.2+ Application
-              |
-              | PDO / prepared SQL
-              v
-            MySQL 8+
+React Web ─────┐
+               ├── HTTPS / JSON ──> Laravel 13 API ──> Eloquent ──> MySQL 8+
+Android App ───┘
 ```
 
-The REST endpoint contract is intentionally kept compatible with the previous Node/Express backend so the web and Android clients do not need a full rewrite.
+The existing `/api/*` contract is retained for the web and Android clients. The former reversible-password feature was intentionally removed: passwords are one-way hashed and administrators may reset them, but cannot retrieve them.
 
-## Repository structure
+## Backend structure
 
 ```text
-Progress-Tracker/
-├── web/                 React + Vite web application
-├── android/             Kotlin + Jetpack Compose application
-├── backend/
-│   ├── public/          PHP web root and uploaded media
-│   ├── src/             PHP API, auth and database layer
-│   ├── database/        MySQL schema and seed
-│   ├── .env.php.example
-│   └── router.php       PHP development router
-├── docs/
-└── dev.cmd
+backend/
+├── app/
+│   ├── Enums/
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   ├── Middleware/
+│   │   └── Requests/
+│   ├── Models/
+│   ├── Services/
+│   └── Support/
+├── bootstrap/
+├── config/
+├── database/
+│   ├── migrations/
+│   └── seeders/
+├── public/
+├── routes/
+├── storage/
+├── tests/
+├── artisan
+├── composer.json
+└── .env.example
 ```
 
-## Local development
+## Requirements
 
-Requirements:
-
-- PHP 8.2+ with `pdo_mysql` and `openssl`
+- PHP 8.3+
+- Composer 2
 - MySQL 8+
-- Node.js 20+ and npm for the React web client
-- Git
+- PHP extensions required by Laravel: Ctype, cURL, DOM, Fileinfo, Filter, Hash, Mbstring, OpenSSL, PCRE, PDO, Session, Tokenizer, XML
+- `pdo_mysql`
+- Node.js 20+ / npm for the web client
+- Java 17 + Gradle/Android Studio only when building Android
 
-### Database
+## First local setup
 
-Create an empty MySQL database:
+Create the database:
 
 ```sql
-CREATE DATABASE progress_tracker CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE progress_tracker
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
 ```
 
-Import:
+Then configure Laravel:
 
-```bash
-mysql -u root -p progress_tracker < backend/database/schema.sql
+```powershell
+cd backend
+composer install
+Copy-Item .env.example .env
+php artisan key:generate
 ```
 
-Copy `backend/.env.php.example` to `backend/.env.php`, set your MySQL credentials, JWT secret, and a 64-character hexadecimal password-encryption key.
+Edit `backend/.env` and set your MySQL credentials:
 
-Then seed the initial Admin account and default periods:
-
-```bash
-php backend/database/seed.php
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=progress_tracker
+DB_USERNAME=root
+DB_PASSWORD=your_mysql_password
 ```
 
-Development credentials default to `ADMIN001 / ChangeMe123!`; change them before deployment.
+Create the schema and development seed:
 
-### Run locally
+```powershell
+php artisan migrate:fresh --seed
+php artisan storage:link
+```
 
-On Windows:
+Default local Admin credentials:
+
+```text
+ADMIN001
+ChangeMe123!
+```
+
+Change this password before any real deployment.
+
+Start the complete local application from the repository root:
 
 ```powershell
 .\dev.cmd
 ```
 
-Or start the backend manually:
+Or run Laravel manually:
 
-```bash
+```powershell
 cd backend
-php -S 127.0.0.1:4000 router.php
+php artisan serve --host=127.0.0.1 --port=4000
 ```
 
-The API is available at `http://127.0.0.1:4000/api/health` and Vite remains at `http://localhost:5173`.
+API health check:
+
+```text
+http://127.0.0.1:4000/api/health
+```
+
+Web client:
+
+```text
+http://localhost:5173
+```
+
+## Database workflow
+
+Do not manually edit production tables. Change the schema through Laravel migrations:
+
+```powershell
+php artisan make:migration ...
+php artisan migrate
+```
+
+Use Eloquent or the Laravel query builder for application queries and transactions for multi-table writes.
+
+## Testing and quality
+
+```powershell
+cd backend
+vendor\bin\pint --test
+php artisan test
+php artisan route:list --path=api
+```
+
+The CI pipeline additionally starts MySQL 8, runs migrations/seeds, tests Laravel, builds React, and builds the Android debug APK.
 
 ## University deployment
 
-Point the PHP virtual host/document root to **`backend/public`**. Apache can use the included `.htaccess`. For Nginx, route non-file API requests to `public/index.php`. Keep `backend/.env.php` outside public access.
+The web server document root must point to **`backend/public`**, never the Laravel project root. Set production values in `backend/.env`, ensure `storage` and `bootstrap/cache` are writable, and run:
 
-The React client can be built normally and configured with `VITE_API_URL=https://your-university-host/api`.
+```bash
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force
+php artisan storage:link
+php artisan optimize
+```
+
+The React client should use:
+
+```dotenv
+VITE_API_URL=https://your-university-host/api
+```
 
 ## Branch workflow
 
@@ -107,4 +174,4 @@ The React client can be built normally and configured with `VITE_API_URL=https:/
 feature/* → development → main
 ```
 
-The PHP/MySQL migration is implemented on `feature/php-mysql-backend` until verified.
+The framework migration is being verified on `feature/laravel-mysql-backend`.
