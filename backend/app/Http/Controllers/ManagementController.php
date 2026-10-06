@@ -69,6 +69,8 @@ class ManagementController extends Controller
     public function updateUser(Request $request, User $user): JsonResponse
     {
         $actor = $request->user();
+        $user->loadMissing('studentProfile.dormitory');
+
         if ($user->role === Role::Admin || ($actor->role === Role::Manager && $user->role === Role::Manager)) {
             abort(403, 'ليس لديك صلاحية لتعديل هذا الحساب');
         }
