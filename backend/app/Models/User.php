@@ -34,6 +34,7 @@ class User extends Authenticatable
     }
 
     public function studentProfile(): HasOne { return $this->hasOne(Student::class); }
+    public function credential(): HasOne { return $this->hasOne(UserCredential::class); }
     public function taughtHalaqahs(): HasMany { return $this->hasMany(Halaqah::class, 'teacher_id'); }
     public function parentLinks(): HasMany { return $this->hasMany(ParentStudent::class, 'parent_id'); }
     public function recordedProgress(): HasMany { return $this->hasMany(ProgressEntry::class, 'teacher_id'); }
