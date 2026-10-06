@@ -35,7 +35,9 @@ Credential reveal requires:
 - role authorization for `ADMIN` or `MANAGER`;
 - row-level authorization through the same account-management rules;
 - Admin accounts are protected from credential reveal;
-- Managers cannot reveal Manager credentials.
+- Managers cannot reveal Manager credentials;
+- a dedicated reveal rate limit;
+- a response marked `Cache-Control: no-store, private` so intermediaries and browsers are instructed not to cache the secret.
 
 ### Auditing
 
