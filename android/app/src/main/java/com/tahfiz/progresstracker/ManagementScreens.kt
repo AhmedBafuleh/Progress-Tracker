@@ -200,9 +200,6 @@ fun UsersScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                     if (account.role != "ADMIN" && (isAdmin || account.role != "MANAGER")) {
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             IconButton(onClick = { editUser = account }) { Icon(Icons.Outlined.Edit, contentDescription = "تعديل") }
-                            if (account.passwordAvailable) {
-                                IconButton(onClick = { viewModel.revealCredential(account.id) }) { Icon(Icons.Outlined.Key, contentDescription = "عرض بيانات الدخول") }
-                            }
                             IconButton(onClick = { resetUser = account }) { Icon(Icons.Outlined.LockReset, contentDescription = "إعادة تعيين كلمة المرور") }
                             IconButton(onClick = { deleteUser = account }) { Icon(Icons.Outlined.Delete, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error) }
                         }
@@ -243,7 +240,7 @@ fun UsersScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
         AlertDialog(
             onDismissRequest = { deleteUser = null },
             title = { Text("حذف الحساب") },
-            text = { Text("هل تريد حذف حساب ${account.fullName}؟ لن يسمح الخادم بالحذف إذا كان مرتبطًا بسجل أكاديمي محفوظ.") },
+            text = { Text("هل تريد حذف حساب ${account.fullName}؟ سيُمنع تسجيل الدخول مع الاحتفاظ بالسجل الأكاديمي المرتبط به.") },
             confirmButton = {
                 TextButton(onClick = { viewModel.deleteUser(account.id); deleteUser = null }) {
                     Text("حذف", color = MaterialTheme.colorScheme.error)
@@ -253,20 +250,6 @@ fun UsersScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
         )
     }
 
-    state.credentialReveal?.let { credential ->
-        AlertDialog(
-            onDismissRequest = viewModel::clearCredential,
-            title = { Text("بيانات الدخول") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    LabeledValue("المعرف", credential.loginId)
-                    LabeledValue("كلمة المرور", credential.password)
-                    Text("لا تشارك هذه البيانات إلا مع صاحب الحساب.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-                }
-            },
-            confirmButton = { TextButton(onClick = viewModel::clearCredential) { Text("إغلاق") } },
-        )
-    }
 }
 
 @Composable
