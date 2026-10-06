@@ -45,6 +45,9 @@ interface ProgressTrackerApi {
     suspend fun deleteUser(@Path("id") id: String): MessageResponse
 
 
+    @GET("admin/users/{id}/credential")
+    suspend fun credential(@Path("id") id: String): CredentialResponse
+
     @PATCH("admin/users/{id}/password")
     suspend fun resetPassword(@Path("id") id: String, @Body request: PasswordResetRequest): MessageResponse
 
