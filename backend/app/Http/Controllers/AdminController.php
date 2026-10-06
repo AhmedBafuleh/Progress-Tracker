@@ -124,10 +124,13 @@ class AdminController extends Controller
     {
         $this->assertManageable($request->user(), $user);
 
-        return response()->json([
-            'loginId' => $user->login_id,
-            'password' => $this->credentialVault->reveal($request->user(), $user, $request),
-        ]);
+        return response()
+            ->json([
+                'loginId' => $user->login_id,
+                'password' => $this->credentialVault->reveal($request->user(), $user, $request),
+            ])
+            ->header('Cache-Control', 'no-store, private')
+            ->header('Pragma', 'no-cache');
     }
 
     public function destroyUser(Request $request, User $user): JsonResponse
