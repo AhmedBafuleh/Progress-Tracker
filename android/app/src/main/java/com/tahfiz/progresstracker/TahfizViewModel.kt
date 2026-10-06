@@ -42,7 +42,6 @@ data class TahfizUiState(
     val aiPeople: List<AiPersonDto> = emptyList(),
     val aiResult: AiAnalysisResponse? = null,
     val aiHistory: List<AiAnalysisResponse> = emptyList(),
-    val credentialReveal: CredentialResponse? = null,
 )
 
 class TahfizViewModel(application: Application) : AndroidViewModel(application) {
@@ -130,9 +129,6 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
         _state.value = _state.value.copy(error = null, message = null)
     }
 
-    fun clearCredential() {
-        _state.value = _state.value.copy(credentialReveal = null)
-    }
 
     private fun loadPublicContent(showLoading: Boolean = false) {
         if (showLoading) {
@@ -365,13 +361,6 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
         ApiClient.api.deleteUser(id).message
     }
 
-    fun revealCredential(id: String) {
-        viewModelScope.launch {
-            runCatching { ApiClient.api.credential(id) }
-                .onSuccess { _state.value = _state.value.copy(credentialReveal = it, error = null) }
-                .onFailure { _state.value = _state.value.copy(error = ApiClient.friendlyError(it, "تعذر عرض بيانات الدخول")) }
-        }
-    }
 
     fun resetPassword(id: String, password: String) = mutate("تعذر إعادة تعيين كلمة المرور") {
         ApiClient.api.resetPassword(id, PasswordResetRequest(password)).message
