@@ -7,17 +7,48 @@ concurrency:
 on:
   push:
     branches:
-      - feature/php-mysql-backend
+      - feature/laravel-mysql-backend
       - development
       - main
   pull_request:
     branches:
+      - feature/php-mysql-backend
       - development
       - main
 
 jobs:
   web-backend:
     runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: progress_tracker_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      APP_ENV: testing
+      APP_DEBUG: "true"
+      APP_URL: http://127.0.0.1:4000
+      FRONTEND_URL: http://localhost:5173
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: progress_tracker_test
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,13 +56,40 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.2"
-          extensions: pdo_mysql, openssl
+          php-version: "8.3"
+          extensions: curl, dom, fileinfo, mbstring, openssl, pdo_mysql, xml
+          coverage: none
+          tools: composer:v2
 
-      - name: Lint PHP backend
-        run: find backend -name "*.php" -print0 | xargs -0 -n1 php -l
+      - name: Validate Composer configuration
+        working-directory: backend
+        run: composer validate --no-check-lock
 
-      - name: Setup Node for web build
+      - name: Install Laravel dependencies
+        working-directory: backend
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Configure Laravel
+        working-directory: backend
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan storage:link
+          php artisan migrate --seed --force
+
+      - name: Laravel code style
+        working-directory: backend
+        run: vendor/bin/pint --test
+
+      - name: Laravel tests
+        working-directory: backend
+        run: php artisan test
+
+      - name: Verify API routes
+        working-directory: backend
+        run: php artisan route:list --path=api
+
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
