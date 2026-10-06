@@ -19,7 +19,7 @@ React Web ─────┐
 Android App ───┘
 ```
 
-The existing `/api/*` contract is retained for the web and Android clients. The former reversible-password feature was intentionally removed: passwords are one-way hashed and administrators may reset them, but cannot retrieve them.
+The existing `/api/*` contract is retained for the web and Android clients. The project requirement that authorized Admin/Manager users can view managed-account credentials is preserved through a separate encrypted credential vault with audit logging; authentication itself still uses one-way password hashes.
 
 ## Backend structure
 
@@ -149,7 +149,9 @@ php artisan test
 php artisan route:list --path=api
 ```
 
-The CI pipeline additionally starts MySQL 8, runs migrations/seeds, tests Laravel, builds React, and builds the Android debug APK.
+The CI pipeline additionally starts MySQL 8, runs migrations/seeds, tests Laravel (including credential-vault authorization/encryption/audit behavior), builds React, and builds the Android debug APK.
+
+See `docs/SECURITY_DECISIONS.md` for the documented credential-vault trade-off and mitigations.
 
 ## University deployment
 
