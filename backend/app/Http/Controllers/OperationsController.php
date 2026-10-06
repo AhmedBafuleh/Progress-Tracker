@@ -180,7 +180,7 @@ class OperationsController extends Controller
 
     public function halaqahReport(Halaqah $halaqah): JsonResponse
     {
-        $halaqah->load(['teacher','students.user','students.dormitory']);
+        $halaqah->load(['teacher','students.user','students.dormitory','students.halaqah.teacher']);
         $progress = ProgressEntry::query()
             ->whereHas('student', fn ($q) => $q->where('halaqah_id', $halaqah->id))
             ->with(['student.user','student.halaqah','teacher','period'])
