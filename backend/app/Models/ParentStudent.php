@@ -10,7 +10,7 @@ class ParentStudent extends Model
 {
     use HasUlids;
 
-    public $updated_at = null;
+    const UPDATED_AT = null;
 
     protected $fillable = ['parent_id', 'student_id'];
 
