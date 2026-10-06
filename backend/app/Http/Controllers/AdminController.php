@@ -9,6 +9,7 @@ use App\Models\Halaqah;
 use App\Models\Student;
 use App\Models\User;
 use App\Support\ApiPresenter;
+use App\Services\CredentialVaultService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
 {
+    public function __construct(private readonly CredentialVaultService $credentialVault) {}
     public function users(Request $request): JsonResponse
     {
         $actor = $request->user();
@@ -24,7 +26,7 @@ class AdminController extends Controller
             ->when($actor->role === Role::Manager, fn ($q) => $q->whereIn('role', [
                 Role::Teacher->value, Role::Student->value, Role::Parent->value,
             ]))
-            ->with(['studentProfile.halaqah', 'studentProfile.dormitory'])
+            ->with(['studentProfile.halaqah', 'studentProfile.dormitory', 'credential'])
             ->orderBy('full_name')
             ->get();
 
@@ -78,6 +80,8 @@ class AdminController extends Controller
                 'is_active' => true,
             ]);
 
+            $this->credentialVault->store($user, $data['password']);
+
             if ($role === Role::Student) {
                 $student = Student::query()->create([
                     'user_id' => $user->id,
@@ -105,10 +109,25 @@ class AdminController extends Controller
 
         $this->assertManageable($actor, $user);
 
-        $user->forceFill(['password' => (string) $request->string('password')])->save();
-        $user->tokens()->delete();
+        $password = (string) $request->string('password');
+
+        DB::transaction(function () use ($user, $password): void {
+            $user->forceFill(['password' => $password])->save();
+            $this->credentialVault->store($user, $password);
+            $user->tokens()->delete();
+        });
 
         return response()->json(['message' => 'تم تحديث كلمة المرور وإلغاء جلسات الدخول القديمة']);
+    }
+
+    public function credential(Request $request, User $user): JsonResponse
+    {
+        $this->assertManageable($request->user(), $user);
+
+        return response()->json([
+            'loginId' => $user->login_id,
+            'password' => $this->credentialVault->reveal($request->user(), $user, $request),
+        ]);
     }
 
     public function destroyUser(Request $request, User $user): JsonResponse
