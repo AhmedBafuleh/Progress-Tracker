@@ -10,7 +10,7 @@ class ActivityAsset extends Model
 {
     use HasUlids;
 
-    public $updated_at = null;
+    const UPDATED_AT = null;
 
     protected $fillable = ['activity_id', 'kind', 'mime_type', 'file_name', 'url', 'sort_order'];
 
