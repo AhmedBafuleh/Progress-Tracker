@@ -1,61 +1,124 @@
-# Local Setup — PHP + MySQL
+# Local Setup — Laravel 13 + MySQL
 
-## Requirements
+## 1. Requirements
 
-- PHP 8.2+ with PDO MySQL and OpenSSL
+Install:
+
+- PHP 8.3+
+- Composer 2
 - MySQL 8+
 - Node.js 20+ / npm
 - Git
+- Java 17 / Android Studio only if testing Android
 
-## Backend
+Laravel requires Ctype, cURL, DOM, Fileinfo, Filter, Hash, Mbstring, OpenSSL, PCRE, PDO, Session, Tokenizer and XML. This project also requires `pdo_mysql`.
 
-1. Create a MySQL database named `progress_tracker`.
-2. Import `backend/database/schema.sql`.
-3. Copy `backend/.env.php.example` to `backend/.env.php`.
-4. Configure the MySQL host, database, username and password.
-5. Set a long random `JWT_SECRET`.
-6. Set `PASSWORD_ENCRYPTION_KEY` to exactly 64 hexadecimal characters.
-7. Run:
+Verify:
+
+```powershell
+php -v
+php -m
+composer --version
+mysql --version
+```
+
+## 2. Backend dependencies
+
+```powershell
+cd backend
+composer install
+Copy-Item .env.example .env
+php artisan key:generate
+```
+
+## 3. MySQL
+
+Create the database once:
+
+```sql
+CREATE DATABASE progress_tracker
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+```
+
+Edit `backend/.env`:
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=progress_tracker
+DB_USERNAME=root
+DB_PASSWORD=your_mysql_password
+```
+
+Laravel is configured for `utf8mb4`, strict MySQL mode and InnoDB.
+
+## 4. Create tables and seed
+
+For the first local Laravel setup, the previous plain-PHP schema can be discarded:
+
+```powershell
+php artisan migrate:fresh --seed
+php artisan storage:link
+```
+
+The seed creates `ADMIN001` with the development password `ChangeMe123!`.
+
+## 5. Run
+
+Backend:
+
+```powershell
+php artisan serve --host=127.0.0.1 --port=4000
+```
+
+Web, in another terminal:
+
+```powershell
+cd ..\web
+npm.cmd install
+npm.cmd run dev
+```
+
+Or from the repository root:
+
+```powershell
+.\dev.cmd
+```
+
+## 6. Checks
+
+```powershell
+cd backend
+php artisan about
+php artisan route:list --path=api
+php artisan test
+```
+
+Open `http://127.0.0.1:4000/api/health`, then log into `http://localhost:5173`.
+
+## 7. Security differences from the prototype
+
+- Authentication uses Laravel Sanctum.
+- Passwords are one-way hashed.
+- Existing passwords cannot be revealed by Admin or Manager.
+- Password reset revokes the user's existing API tokens.
+- Account deletion is a soft delete so academic records remain intact.
+- Uploaded files are stored through Laravel's public storage disk with MIME and size validation.
+- Authorization is enforced server-side with role middleware plus row-level checks.
+
+## 8. Production
+
+The university server must serve `backend/public`, not `backend`.
+
+Typical deployment:
 
 ```bash
-php backend/database/seed.php
-php -S 127.0.0.1:4000 backend/router.php
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force
+php artisan storage:link
+php artisan optimize
 ```
 
-Health check:
-
-```text
-http://127.0.0.1:4000/api/health
-```
-
-## Web
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-The existing React API client remains compatible with the PHP backend.
-
-## Production / university server
-
-- PHP document root: `backend/public`
-- MySQL database: import `backend/database/schema.sql`
-- Keep `.env.php` private.
-- Enable `pdo_mysql` and `openssl`.
-- Apache: `mod_rewrite` should be enabled for the included `.htaccess`.
-- Set `WEB_ORIGIN` to the deployed frontend origin.
-
-## Verification checklist
-
-1. `GET /api/health` returns `status: ok`.
-2. Admin can log in.
-3. Admin/Manager can manage allowed accounts.
-4. Teacher only sees assigned Halaqah students.
-5. Student only sees their own progress.
-6. Parent only sees linked children.
-7. Library and media uploads are written under `backend/public/uploads`.
-8. Reports and monthly tests load.
-9. Notifications work.
-10. Web and Android clients authenticate against the PHP endpoint.
+Never commit `.env`, and set `APP_DEBUG=false` in production.
