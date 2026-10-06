@@ -31,7 +31,6 @@ data class ManagedUserDto(
     val joinedAt: String? = null,
     val isActive: Boolean = true,
     val createdAt: String? = null,
-    val passwordAvailable: Boolean = false,
     val studentProfile: ManagedStudentProfileDto? = null,
 )
 
@@ -72,7 +71,6 @@ data class UpdateUserRequest(
     val memorizedAmount: String? = null,
 )
 
-data class CredentialResponse(val loginId: String, val password: String)
 data class PasswordResetRequest(val password: String)
 data class MessageResponse(val message: String)
 
