@@ -34,6 +34,7 @@ Clients never connect directly to MySQL.
 - Migrations are the source of truth for schema history.
 - Seeders create required development/bootstrap data.
 - Sanctum provides hashed bearer tokens for web/mobile API clients.
+- Recoverable managed-account credentials are isolated in a dedicated encrypted vault service and tables with audit logs.
 - Laravel Storage manages uploaded files.
 
 ## Database design
@@ -50,7 +51,11 @@ MySQL runs with `utf8mb4`, InnoDB and strict mode.
 
 ## Password handling
 
-Passwords are only stored as one-way hashes. The previous recoverable-password ciphertext design is removed. Authorized staff may set a new password, which also revokes the user's existing Sanctum tokens.
+Authentication always uses the one-way hash stored in `users.password`.
+
+Because this project explicitly requires authorized Admin/Manager users to view managed-account credentials, the recoverable copy is stored separately in `user_credentials`, encrypted with Laravel's application encryption key. Credential reveal is handled by `CredentialVaultService`, is separately rate-limited, returned with no-store cache headers, and creates an audit row in `credential_access_logs`.
+
+Password reset updates both representations inside one transaction and revokes the user's existing Sanctum tokens. See `docs/SECURITY_DECISIONS.md` for the rationale, trade-off, and mitigations.
 
 ## Deletion
 
@@ -70,7 +75,7 @@ The endpoint families remain:
 - `/api/reports`
 - `/api/ai`
 
-The intentional compatibility exception is the old credential-reveal endpoint, which has been removed for security.
+The credential-reveal endpoint remains available for authorized account-management users because it is an explicit project requirement; its implementation is isolated, encrypted, audited, rate-limited, and excluded from normal user payloads.
 
 ## Deployment
 
