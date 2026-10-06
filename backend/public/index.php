@@ -1,19 +1,17 @@
 <?php
-declare(strict_types=1);
-require dirname(__DIR__) . '/src/bootstrap.php';
-require dirname(__DIR__) . '/src/api.php';
 
-cors_headers();
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
-    http_response_code(204);
-    exit;
+use Illuminate\Foundation\Application;
+use Illuminate\Http\Request;
+
+define('LARAVEL_START', microtime(true));
+
+if (file_exists($maintenance = __DIR__.'/../storage/framework/maintenance.php')) {
+    require $maintenance;
 }
-try {
-    handle_api($_SERVER['REQUEST_METHOD'] ?? 'GET', route_path());
-} catch (PDOException $e) {
-    error_log($e->__toString());
-    api_error('حدث خطأ في قاعدة البيانات', 500, 'DATABASE_ERROR');
-} catch (Throwable $e) {
-    error_log($e->__toString());
-    api_error(config()['APP_ENV'] === 'development' ? $e->getMessage() : 'حدث خطأ غير متوقع', 500, 'INTERNAL_ERROR');
-}
+
+require __DIR__.'/../vendor/autoload.php';
+
+/** @var Application $app */
+$app = require_once __DIR__.'/../bootstrap/app.php';
+
+$app->handleRequest(Request::capture());
