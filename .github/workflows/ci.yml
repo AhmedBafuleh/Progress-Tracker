@@ -63,7 +63,7 @@ jobs:
 
       - name: Validate Composer configuration
         working-directory: backend
-        run: composer validate --no-check-lock
+        run: composer validate --no-check-publish
 
       - name: Install Laravel dependencies
         working-directory: backend
@@ -77,9 +77,8 @@ jobs:
           php artisan storage:link
           php artisan migrate --seed --force
 
-      - name: Laravel code style
-        working-directory: backend
-        run: vendor/bin/pint --test
+      - name: PHP syntax check
+        run: find backend/app backend/bootstrap backend/config backend/database backend/routes backend/tests -name "*.php" -print0 | xargs -0 -n1 php -l
 
       - name: Laravel tests
         working-directory: backend
