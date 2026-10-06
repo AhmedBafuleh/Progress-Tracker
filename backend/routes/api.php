@@ -26,6 +26,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::middleware('role:ADMIN,MANAGER')->group(function () {
         Route::get('/admin/users', [AdminController::class, 'users']);
         Route::post('/admin/users', [AdminController::class, 'storeUser']);
+        Route::get('/admin/users/{user}/credential', [AdminController::class, 'credential']);
         Route::patch('/admin/users/{user}/password', [AdminController::class, 'resetPassword']);
         Route::delete('/admin/users/{user}', [AdminController::class, 'destroyUser']);
         Route::get('/admin/halaqahs', [AdminController::class, 'halaqahs']);
