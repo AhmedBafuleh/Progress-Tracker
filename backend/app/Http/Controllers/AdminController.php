@@ -105,7 +105,7 @@ class AdminController extends Controller
 
         $this->assertManageable($actor, $user);
 
-        $user->forceFill(['password' => $request->string('password')])->save();
+        $user->forceFill(['password' => (string) $request->string('password')])->save();
         $user->tokens()->delete();
 
         return response()->json(['message' => 'تم تحديث كلمة المرور وإلغاء جلسات الدخول القديمة']);
