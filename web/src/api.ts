@@ -27,6 +27,7 @@ export type ManagedUser = {
   joinedAt?: string | null;
   isActive: boolean;
   createdAt: string;
+  passwordAvailable: boolean;
   studentProfile?: {
     halaqah?: { id: string; name: string } | null;
     dormitory?: { building: string; room: string } | null;
@@ -452,7 +453,10 @@ export const api = {
     request<{ message: string }>('/admin/users', {
       method: 'POST',
       body: JSON.stringify(payload),
-    }),  resetPassword: (userId: string, password: string) =>
+    }),
+  getCredential: (userId: string) =>
+    request<{ loginId: string; password: string }>(`/admin/users/${userId}/credential`),
+  resetPassword: (userId: string, password: string) =>
     request<{ message: string }>(`/admin/users/${userId}/password`, {
       method: 'PATCH',
       body: JSON.stringify({ password }),
