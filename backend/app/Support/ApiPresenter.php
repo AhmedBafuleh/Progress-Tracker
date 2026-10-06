@@ -38,7 +38,7 @@ final class ApiPresenter
             'joinedAt' => $user->joined_at?->toDateString(),
             'isActive' => $user->is_active,
             'createdAt' => $user->created_at?->toISOString(),
-            'passwordAvailable' => false,
+            'passwordAvailable' => $user->relationLoaded('credential') ? $user->credential !== null : $user->credential()->exists(),
             'studentProfile' => $user->studentProfile ? [
                 'halaqah' => $user->studentProfile->halaqah ? [
                     'id' => $user->studentProfile->halaqah->id,
