@@ -1,50 +1,64 @@
 # System Architecture
 
-## Stack
-
-The Tahfiz Progress Tracker uses a three-layer client-server architecture:
-
-1. **Presentation** — React + TypeScript web client and Kotlin + Jetpack Compose Android client.
-2. **Application** — PHP 8.2+ JSON REST API.
-3. **Data** — MySQL 8+ accessed through PDO prepared statements.
+## Application layers
 
 ```text
 React Web ─────┐
-               ├── HTTPS/JSON ──> PHP REST API ──> MySQL
-Android App ───┘
+               │
+Android App ───┼── HTTPS / JSON REST API
+               │
+               v
+        Laravel 13 / PHP 8.3+
+               │
+        Controllers + Requests
+               │
+     Services / Authorization
+               │
+        Eloquent ORM
+               │
+               v
+             MySQL 8+
 ```
 
-The clients never connect directly to MySQL.
+Clients never connect directly to MySQL.
 
-## Roles
+## Backend conventions
 
-- `ADMIN`: full administration, academic tracking, reports, content and AI.
-- `MANAGER`: Teacher/Student/Parent management, parent links, content, notifications and reports within manager permissions.
-- `TEACHER`: assigned Halaqah students, progress, tests, notes, reports and leave requests.
-- `STUDENT`: own progress, report, notifications and leave requests.
-- `PARENT`: linked-child progress and reports.
+- `routes/api.php` contains the HTTP route map.
+- Controllers translate HTTP requests and responses.
+- Form Requests own reusable validation rules.
+- `EnsureRole` provides coarse role-based access control.
+- Controllers/services enforce row-level access, such as a teacher being restricted to assigned Halaqahs.
+- Eloquent models define domain relationships and casts.
+- Multi-table changes use database transactions.
+- Migrations are the source of truth for schema history.
+- Seeders create required development/bootstrap data.
+- Sanctum provides hashed bearer tokens for web/mobile API clients.
+- Laravel Storage manages uploaded files.
 
-## Backend layout
+## Database design
 
-```text
-backend/
-├── public/
-│   ├── index.php        front controller
-│   ├── .htaccess        Apache routing
-│   └── uploads/         runtime uploads
-├── src/
-│   ├── bootstrap.php    configuration, PDO, JWT, auth, crypto
-│   └── api.php          REST routes and domain operations
-├── database/
-│   ├── schema.sql       MySQL schema
-│   └── seed.php         initial Admin/content/period seed
-├── .env.php.example
-└── router.php           PHP built-in-server router
-```
+The application uses ULID primary keys for domain entities while keeping indexes compact and predictable. Foreign keys enforce relationships, and composite indexes follow frequent access patterns such as:
+
+- student + progress date
+- teacher + progress date
+- Halaqah + test date
+- recipient + read state + notification date
+- status + leave-request date
+
+MySQL runs with `utf8mb4`, InnoDB and strict mode.
+
+## Password handling
+
+Passwords are only stored as one-way hashes. The previous recoverable-password ciphertext design is removed. Authorized staff may set a new password, which also revokes the user's existing Sanctum tokens.
+
+## Deletion
+
+User accounts use soft deletes. This protects academic/reporting history from accidental destructive account deletion while preventing the deleted account from authenticating.
 
 ## API compatibility
 
-The PHP migration retains the existing endpoint families:
+The endpoint families remain:
 
 - `/api/auth`
 - `/api/admin`
@@ -56,22 +70,11 @@ The PHP migration retains the existing endpoint families:
 - `/api/reports`
 - `/api/ai`
 
-This allows the existing web and Android clients to continue using their current data models.
+The intentional compatibility exception is the old credential-reveal endpoint, which has been removed for security.
 
-## Security
+## Deployment
 
-- Passwords use PHP bcrypt hashes.
-- Existing bcryptjs `$2b$` hashes are accepted during migration through compatibility verification.
-- JWT access tokens use HMAC-SHA256.
-- Role checks are enforced server-side.
-- SQL uses PDO prepared statements.
-- Password-reveal data uses AES-256-GCM and the same `v1.iv.tag.ciphertext` format as the previous Node implementation.
-- Private configuration lives in `backend/.env.php` and is ignored by Git.
-- Uploaded media is the only runtime content placed under the public web root.
-
-## Database
-
-The MySQL schema preserves the existing domain model: users, students, halaqahs, dormitory assignments, parent links, periods, progress entries, activities/assets, home content, library items, leave requests, notes/violations, monthly tests/questions and notifications.
+The HTTP document root must be `backend/public`. Secrets live in `backend/.env`, outside the public root and source control. Production deployments should run migrations and Laravel optimization commands after installing Composer dependencies.
 
 ## Delivery
 
@@ -79,4 +82,4 @@ The MySQL schema preserves the existing domain model: users, students, halaqahs,
 feature/* -> development -> main
 ```
 
-CI lints the PHP backend, builds the React web application, and builds the Android debug APK.
+CI verifies Laravel against MySQL 8, checks formatting/tests/routes, builds React, and builds Android.
