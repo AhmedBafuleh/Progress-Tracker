@@ -356,6 +356,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
+  headers.set('Accept', 'application/json');
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const response = await fetch(`${API_URL}${path}`, { ...init, headers });
@@ -401,6 +402,7 @@ export const api = {
   uploadLibraryFile: async (file: File) => {
     const token = getToken();
     const headers = new Headers();
+    headers.set('Accept', 'application/json');
     headers.set('Content-Type', file.type || 'application/octet-stream');
     headers.set('X-File-Name', encodeURIComponent(file.name));
     if (token) headers.set('Authorization', `Bearer ${token}`);
