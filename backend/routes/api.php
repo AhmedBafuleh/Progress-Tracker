@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AiController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ContentController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ManagementController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OperationsController;
@@ -31,6 +32,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::delete('/admin/users/{user}', [AdminController::class, 'destroyUser']);
         Route::get('/admin/halaqahs', [AdminController::class, 'halaqahs']);
 
+        Route::get('/management/dashboard-summary', [DashboardController::class, 'summary']);
         Route::get('/management/teachers', [ManagementController::class, 'teachers']);
         Route::patch('/management/users/{user}', [ManagementController::class, 'updateUser']);
         Route::get('/management/parent-links', [ManagementController::class, 'parentLinks']);
