@@ -323,6 +323,17 @@ export type AiAnalysisResponse = {
   model: string;
 };
 
+export type DashboardSummary = {
+  activeUsers: number;
+  studentUsers: number;
+  halaqahs: number;
+  progressRecords: number;
+  libraryItems: number;
+  mediaActivities: number;
+  averageRating: number;
+  latestProgress: ProgressEntry[];
+};
+
 export type ParentLink = {
   id: string;
   createdAt: string;
@@ -468,6 +479,7 @@ export const api = {
   deleteUser: (userId: string) =>
     request<{ message: string }>(`/admin/users/${userId}`, { method: 'DELETE' }),
 
+  getDashboardSummary: () => request<{ summary: DashboardSummary }>('/management/dashboard-summary'),
   listTeachers: () => request<{ teachers: Teacher[] }>('/management/teachers'),
   updateHalaqah: (id: string, payload: Record<string, unknown>) =>
     request<{ halaqah: Halaqah; message: string }>(`/management/halaqahs/${id}`, {
