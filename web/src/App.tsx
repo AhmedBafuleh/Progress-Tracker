@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import {
   api,
@@ -6,6 +6,7 @@ import {
   saveToken,
   resolveMediaUrl,
   type Activity,
+  type DashboardSummary,
   type Halaqah,
   type HomeContent,
   type LibraryItem,
@@ -65,6 +66,33 @@ function accountPrefix(role: CreatableRole) {
 }
 
 type ManagementTab = 'overview' | 'users' | 'halaqahs' | 'parents' | 'record' | 'tests' | 'notes' | 'leaves' | 'notifications' | 'library' | 'media' | 'home' | 'schedule' | 'reports' | 'ai';
+
+type DashboardResource =
+  | 'summary'
+  | 'users'
+  | 'halaqahs'
+  | 'teachers'
+  | 'links'
+  | 'library'
+  | 'media'
+  | 'home'
+  | 'periods'
+  | 'progress';
+
+function resourcesForManagementTab(tab: ManagementTab): DashboardResource[] {
+  switch (tab) {
+    case 'overview': return ['summary'];
+    case 'users': return ['users', 'halaqahs'];
+    case 'halaqahs': return ['halaqahs', 'teachers'];
+    case 'parents': return ['users', 'links'];
+    case 'library': return ['library'];
+    case 'media': return ['media'];
+    case 'home': return ['home'];
+    case 'schedule': return ['periods'];
+    case 'reports': return ['users', 'halaqahs', 'progress'];
+    default: return [];
+  }
+}
 
 type NavItem<T extends string> = { id: T; label: string; icon: IconName; group?: string };
 
@@ -575,7 +603,11 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
   const [home, setHome] = useState<HomeContent>(initialHome);
   const [periods, setPeriods] = useState<Period[]>([]);
   const [progress, setProgress] = useState<ProgressEntry[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const loadedResources = useRef<Set<DashboardResource>>(new Set());
+  const inFlightResources = useRef<Map<DashboardResource, Promise<void>>>(new Map());
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
@@ -619,60 +651,132 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
     return items;
   }, [isAdmin]);
 
-  async function refreshAll() {
-    setLoading(true);
-    setError('');
-    try {
-      const [u, h, t, p, l, m, hm, per, prog] = await Promise.all([
-        api.listUsers(),
-        api.listHalaqahs(),
-        api.listTeachers(),
-        api.listParentLinks(),
-        api.getManagedLibrary(),
-        api.getManagedMedia(),
-        api.getHome(),
-        api.listPeriods(),
-        api.listProgress(),
-      ]);
-      setUsers(u.users);
-      setHalaqahs(h.halaqahs);
-      setTeachers(t.teachers);
-      setLinks(p.links);
-      setLibrary(l.items);
-      setMedia(m.activities);
-      setHome(hm.home);
-      setPeriods(per.periods);
-      setProgress(prog.entries);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذر تحميل بيانات لوحة التحكم');
-    } finally {
-      setLoading(false);
-    }
+  function loadResource(resource: DashboardResource, force = false): Promise<void> {
+    const existing = inFlightResources.current.get(resource);
+    if (existing) return existing;
+    if (!force && loadedResources.current.has(resource)) return Promise.resolve();
+
+    const request = (async () => {
+      switch (resource) {
+        case 'summary': {
+          const result = await api.getDashboardSummary();
+          setSummary(result.summary);
+          break;
+        }
+        case 'users': {
+          const result = await api.listUsers();
+          setUsers(result.users);
+          break;
+        }
+        case 'halaqahs': {
+          const result = await api.listHalaqahs();
+          setHalaqahs(result.halaqahs);
+          break;
+        }
+        case 'teachers': {
+          const result = await api.listTeachers();
+          setTeachers(result.teachers);
+          break;
+        }
+        case 'links': {
+          const result = await api.listParentLinks();
+          setLinks(result.links);
+          break;
+        }
+        case 'library': {
+          const result = await api.getManagedLibrary();
+          setLibrary(result.items);
+          break;
+        }
+        case 'media': {
+          const result = await api.getManagedMedia();
+          setMedia(result.activities);
+          break;
+        }
+        case 'home': {
+          const result = await api.getHome();
+          if (result.home) setHome(result.home);
+          break;
+        }
+        case 'periods': {
+          const result = await api.listPeriods();
+          setPeriods(result.periods);
+          break;
+        }
+        case 'progress': {
+          const result = await api.listProgress();
+          setProgress(result.entries);
+          break;
+        }
+      }
+
+      loadedResources.current.add(resource);
+    })().finally(() => {
+      inFlightResources.current.delete(resource);
+    });
+
+    inFlightResources.current.set(resource, request);
+    return request;
   }
 
-  useEffect(() => { void refreshAll(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const resources = resourcesForManagementTab(active);
+
+    if (resources.every((resource) => loadedResources.current.has(resource))) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    void Promise.all(resources.map((resource) => loadResource(resource)))
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'تعذر تحميل بيانات الصفحة');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [active]);
 
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== mode) return <Navigate to={routeForRole(user.role)} replace />;
 
-  const activeUsers = users.filter((entry) => entry.isActive).length;
-  const studentUsers = users.filter((entry) => entry.role === 'STUDENT').length;
-  const avg = averageRating(progress);
+  const activeUsers = summary?.activeUsers ?? users.filter((entry) => entry.isActive).length;
+  const studentUsers = summary?.studentUsers ?? users.filter((entry) => entry.role === 'STUDENT').length;
+  const avg = summary?.averageRating ?? averageRating(progress);
 
-  function flash(message: string) { setNotice(message); setError(''); void refreshAll(); }
+  function flash(message: string) {
+    setNotice(message);
+    setError('');
+    loadedResources.current.delete('summary');
+
+    const resources = resourcesForManagementTab(active);
+    if (!resources.length) return;
+
+    setRefreshing(true);
+    void Promise.all(resources.map((resource) => loadResource(resource, true)))
+      .catch((err) => setError(err instanceof Error ? err.message : 'تعذر تحديث بيانات الصفحة'))
+      .finally(() => setRefreshing(false));
+  }
+
   function fail(message: string) { setError(message); setNotice(''); }
 
   return (
     <DashboardShell user={user} title={isAdmin ? 'لوحة الإدارة' : 'لوحة المشرف'} nav={nav} active={active} onChange={setActive} onLogout={onLogout}>
       <Notice message={notice} error={error} />
+      {refreshing && <div className="refreshing-indicator">جارٍ تحديث الصفحة...</div>}
       {loading && <div className="loading-panel">جارٍ تحميل البيانات...</div>}
       {!loading && active === 'overview' && (
         <>
           <div className="stat-grid">
             <StatCard label="الحسابات النشطة" value={activeUsers} />
             <StatCard label="الطلاب" value={studentUsers} />
-            <StatCard label="الحلقات" value={halaqahs.length} />
-            <StatCard label={isAdmin ? 'سجلات المتابعة' : 'مواد المكتبة'} value={isAdmin ? progress.length : library.length} />
+            <StatCard label="الحلقات" value={summary?.halaqahs ?? halaqahs.length} />
+            <StatCard label={isAdmin ? 'سجلات المتابعة' : 'مواد المكتبة'} value={isAdmin ? (summary?.progressRecords ?? progress.length) : ((summary?.libraryItems ?? library.length) + (summary?.mediaActivities ?? media.length))} />
           </div>
           <section className="admin-panel dashboard-welcome">
             <div>
@@ -682,12 +786,12 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
             </div>
             {isAdmin
               ? <div className="summary-ring"><strong>{avg.toFixed(1)}</strong><span>متوسط التقييم / 5</span></div>
-              : <div className="summary-ring"><strong>{library.length + media.length}</strong><span>مواد ومنشورات</span></div>}
+              : <div className="summary-ring"><strong>{(summary?.libraryItems ?? library.length) + (summary?.mediaActivities ?? media.length)}</strong><span>مواد ومنشورات</span></div>}
           </section>
           {isAdmin && (
             <section className="admin-panel">
               <div className="panel-heading"><div><span>آخر المتابعة</span><h2>أحدث سجلات الطلاب</h2></div></div>
-              <ProgressTable entries={progress.slice(0, 6)} compact />
+              <ProgressTable entries={summary?.latestProgress ?? progress.slice(0, 6)} compact />
             </section>
           )}
         </>
