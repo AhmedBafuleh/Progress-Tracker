@@ -99,7 +99,7 @@ function BrandLogo() {
 function PublicLayout({ children, user }: { children: ReactNode; user: SessionUser | null }) {
   const [footerContent, setFooterContent] = useState<HomeContent>(initialHome);
   useEffect(() => {
-    void api.getHome().then((result) => setFooterContent(result.home)).catch(() => undefined);
+    void api.getHome().then((result) => { if (result.home) setFooterContent(result.home); }).catch(() => undefined);
   }, []);
 
   return (
@@ -141,7 +141,7 @@ function HomePage({ user }: { user: SessionUser | null }) {
   const [home, setHome] = useState<HomeContent>(initialHome);
 
   useEffect(() => {
-    void api.getHome().then((result) => setHome(result.home)).catch(() => undefined);
+    void api.getHome().then((result) => { if (result.home) setHome(result.home); }).catch(() => undefined);
   }, []);
 
   return (
