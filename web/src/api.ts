@@ -349,6 +349,10 @@ function getToken() {
   return localStorage.getItem('progress_tracker_token');
 }
 
+export function hasSavedToken() {
+  return Boolean(getToken());
+}
+
 export function saveToken(token: string) {
   localStorage.setItem('progress_tracker_token', token);
 }
@@ -362,6 +366,9 @@ export function resolveMediaUrl(url: string) {
   const origin = new URL(API_URL, window.location.origin).origin;
   return `${origin}${url.startsWith('/') ? url : `/${url}`}`;
 }
+
+let homeContentCache: HomeContent | null = null;
+let homeContentRequest: Promise<{ home: HomeContent }> | null = null;
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
@@ -391,16 +398,33 @@ export const api = {
 
   me: () => request<{ user: SessionUser; dashboardReady: boolean }>('/auth/me'),
 
-  getHome: () => request<{ home: HomeContent }>('/content/home'),
+  getHome: () => {
+    if (homeContentCache) return Promise.resolve({ home: homeContentCache });
+    if (homeContentRequest) return homeContentRequest;
+
+    homeContentRequest = request<{ home: HomeContent }>('/content/home')
+      .then((result) => {
+        if (result.home) homeContentCache = result.home;
+        return result;
+      })
+      .finally(() => {
+        homeContentRequest = null;
+      });
+
+    return homeContentRequest;
+  },
   getPublicLibrary: () => request<{ items: LibraryItem[] }>('/content/library'),
   getPublicMedia: () => request<{ activities: Activity[] }>('/content/media'),
   getManagedLibrary: () => request<{ items: LibraryItem[] }>('/content/library/manage'),
   getManagedMedia: () => request<{ activities: Activity[] }>('/content/media/manage'),
-  updateHome: (payload: HomeContent) =>
-    request<{ home: HomeContent; message: string }>('/content/home', {
+  updateHome: async (payload: HomeContent) => {
+    const result = await request<{ home: HomeContent; message: string }>('/content/home', {
       method: 'PUT',
       body: JSON.stringify(payload),
-    }),
+    });
+    homeContentCache = result.home;
+    return result;
+  },
   createLibraryItem: (payload: Record<string, unknown>) =>
     request<{ item: LibraryItem; message: string }>('/content/library', {
       method: 'POST',
