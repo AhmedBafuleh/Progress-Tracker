@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-rou
 import {
   api,
   clearToken,
+  hasSavedToken,
   saveToken,
   resolveMediaUrl,
   type Activity,
@@ -1561,7 +1562,15 @@ export default function App() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    api.me().then((result) => setUser(result.user)).catch(() => clearToken()).finally(() => setChecking(false));
+    if (!hasSavedToken()) {
+      setChecking(false);
+      return;
+    }
+
+    api.me()
+      .then((result) => setUser(result.user))
+      .catch(() => clearToken())
+      .finally(() => setChecking(false));
   }, []);
 
   function logout() { clearToken(); setUser(null); window.location.href = '/login'; }
