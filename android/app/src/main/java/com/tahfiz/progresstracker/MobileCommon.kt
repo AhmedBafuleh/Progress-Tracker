@@ -115,8 +115,6 @@ fun sectionsForRole(role: String): List<MobileSection> = when (role) {
         MobileSection.USERS,
         MobileSection.HALAQAHS,
         MobileSection.PARENT_LINKS,
-        MobileSection.RECORD,
-        MobileSection.TESTS,
         MobileSection.NOTES,
         MobileSection.LEAVES,
         MobileSection.NOTIFICATIONS,

@@ -292,6 +292,7 @@ data class CreateMonthlyTestRequest(
     val studentId: String,
     val type: String,
     val matnName: String? = null,
+    val score: Int,
     val testDate: String,
     val note: String? = null,
     val questions: List<MonthlyTestQuestionDto>,

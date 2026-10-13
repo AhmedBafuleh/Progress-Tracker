@@ -21,6 +21,7 @@ data class TahfizUiState(
     val halaqahs: List<HalaqahDto> = emptyList(),
     val teachers: List<TeacherDto> = emptyList(),
     val students: List<StudentDto> = emptyList(),
+    val monthlyTestStudents: List<StudentDto> = emptyList(),
     val children: List<StudentDto> = emptyList(),
     val parentLinks: List<ParentLinkDto> = emptyList(),
     val periods: List<PeriodDto> = emptyList(),
@@ -191,7 +192,6 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
                         val progress = async { ApiClient.api.progress().entries }
                         val leaves = async { ApiClient.api.leaves().requests }
                         val notes = async { ApiClient.api.notes().notes }
-                        val tests = async { ApiClient.api.monthlyTests().tests }
                         val notifications = async { ApiClient.api.notifications() }
                         val aiStatus = async { ApiClient.api.aiStatus() }
                         val aiPeople = async { ApiClient.api.aiPeople().people }
@@ -206,7 +206,6 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
                             progress = progress.await(),
                             leaves = leaves.await(),
                             notes = notes.await(),
-                            tests = tests.await(),
                             notifications = notifications.await().notifications,
                             home = commonHome.await(),
                             library = commonLibrary.await(),
@@ -248,6 +247,7 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
 
                     "TEACHER" -> {
                         val students = async { ApiClient.api.students().students }
+                        val monthlyTestStudents = async { ApiClient.api.monthlyTestStudents().students }
                         val periods = async { ApiClient.api.periods().periods }
                         val progress = async { ApiClient.api.progress().entries }
                         val leaves = async { ApiClient.api.leaves().requests }
@@ -255,6 +255,7 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
                         val tests = async { ApiClient.api.monthlyTests().tests }
                         DashboardPayload(
                             students = students.await(),
+                            monthlyTestStudents = monthlyTestStudents.await(),
                             periods = periods.await(),
                             progress = progress.await(),
                             leaves = leaves.await(),
@@ -311,6 +312,7 @@ class TahfizViewModel(application: Application) : AndroidViewModel(application) 
                     halaqahs = payload.halaqahs,
                     teachers = payload.teachers,
                     students = payload.students,
+                    monthlyTestStudents = payload.monthlyTestStudents,
                     children = payload.children,
                     parentLinks = payload.parentLinks,
                     periods = payload.periods,
@@ -623,6 +625,7 @@ private data class DashboardPayload(
     val halaqahs: List<HalaqahDto> = emptyList(),
     val teachers: List<TeacherDto> = emptyList(),
     val students: List<StudentDto> = emptyList(),
+    val monthlyTestStudents: List<StudentDto> = emptyList(),
     val children: List<StudentDto> = emptyList(),
     val parentLinks: List<ParentLinkDto> = emptyList(),
     val periods: List<PeriodDto> = emptyList(),
