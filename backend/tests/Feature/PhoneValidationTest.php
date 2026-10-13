@@ -30,7 +30,10 @@ class PhoneValidationTest extends TestCase
             'password' => 'StrongPassword123!',
             'role' => 'TEACHER',
             'mobile' => '05ABC123',
-        ])->assertUnprocessable()->assertJsonValidationErrors('mobile');
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'VALIDATION_ERROR')
+            ->assertJsonStructure(['error' => ['fields' => ['mobile']]]);
 
         $this->postJson('/api/admin/users', [
             'loginNumber' => '7002',
