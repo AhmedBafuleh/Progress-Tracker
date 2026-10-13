@@ -315,7 +315,7 @@ private fun CreateUserDialog(
                 item { OutlinedTextField(fullName, { fullName = it }, Modifier.fillMaxWidth(), label = { Text("الاسم الكامل") }) }
                 item { OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("كلمة المرور") }, singleLine = true) }
                 item { OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text("البريد الإلكتروني") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), singleLine = true) }
-                item { OutlinedTextField(mobile, { mobile = it }, Modifier.fillMaxWidth(), label = { Text("رقم الجوال") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), singleLine = true) }
+                item { OutlinedTextField(mobile, { mobile = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("رقم الجوال") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), singleLine = true) }
                 item { OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text("العنوان") }) }
                 if (role == "STUDENT") {
                     item { OutlinedTextField(age, { age = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("العمر") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true) }
@@ -387,7 +387,7 @@ private fun EditUserDialog(
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item { OutlinedTextField(fullName, { fullName = it }, Modifier.fillMaxWidth(), label = { Text("الاسم") }) }
                 item { OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text("البريد الإلكتروني") }) }
-                item { OutlinedTextField(mobile, { mobile = it }, Modifier.fillMaxWidth(), label = { Text("الجوال") }) }
+                item { OutlinedTextField(mobile, { mobile = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("الجوال") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), singleLine = true) }
                 item { OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text("العنوان") }) }
                 if (account.role != "PARENT") item { OutlinedTextField(joinedAt, { joinedAt = it }, Modifier.fillMaxWidth(), label = { Text("تاريخ الانضمام") }) }
                 if (account.role == "STUDENT") {
