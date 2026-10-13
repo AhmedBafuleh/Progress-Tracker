@@ -1,7 +1,10 @@
-# Dependencies
+# JavaScript dependencies
 node_modules/
 
-# Environment files
+# PHP / Composer dependencies
+vendor/
+
+# Environment files and secrets
 .env
 .env.*
 !.env.example
@@ -23,7 +26,7 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Prisma / local databases
+# Local databases
 *.db
 *.db-journal
 
@@ -31,3 +34,18 @@ Thumbs.db
 .gradle/
 local.properties
 **/build/
+
+# Laravel runtime
+backend/public/storage
+backend/storage/app/public/*
+!backend/storage/app/public/.gitignore
+backend/storage/framework/cache/*
+!backend/storage/framework/cache/.gitignore
+backend/storage/framework/sessions/*
+!backend/storage/framework/sessions/.gitignore
+backend/storage/framework/views/*
+!backend/storage/framework/views/.gitignore
+backend/storage/logs/*
+!backend/storage/logs/.gitignore
+backend/bootstrap/cache/*
+!backend/bootstrap/cache/.gitignore

@@ -2,105 +2,178 @@
 
 نظام إدارة ومتابعة تحفيظ القرآن الكريم.
 
-## Prototype goal
+## Stack
 
-The current prototype is intentionally scoped to demonstrate a working vertical slice of the system:
+The application uses:
 
-- Arabic-first, right-to-left public website.
-- Public pages for the Tahfiz introduction, library, media/activities, and login.
-- Working Admin authentication.
-- Working Admin user-management flow for Manager, Teacher, Student, and Parent accounts.
-- Student creation includes Halaqah and dormitory assignment.
-- Parent-to-student linking can be added later.
-- Non-Admin accounts are stored and authenticated correctly; until their portals are implemented they receive the Arabic message: **لوحة التحكم قيد التطوير**.
-
-## Architecture
+- **Laravel 13 / PHP 8.3+** for the REST API.
+- **MySQL 8+** for persistent data.
+- **Laravel Sanctum** for bearer-token API authentication.
+- **Eloquent ORM + Laravel migrations** for the data layer.
+- React + TypeScript + Vite for the Arabic/RTL web client.
+- Kotlin + Jetpack Compose for Android.
 
 ```text
-React Web Client (Arabic / RTL)
-            |
-            | HTTPS / JSON REST API
-            v
-Node.js + Express Application Layer
-            |
-            | Prisma ORM
-            v
-        PostgreSQL
+React Web ─────┐
+               ├── HTTPS / JSON ──> Laravel 13 API ──> Eloquent ──> MySQL 8+
+Android App ───┘
 ```
 
-The future Android application will be implemented separately using Kotlin + Jetpack Compose and will consume the same REST API.
+The existing `/api/*` contract is retained for the web and Android clients. The project requirement that authorized Admin/Manager users can view managed-account credentials is preserved through a separate encrypted credential vault with audit logging; authentication itself still uses one-way password hashes.
 
-## Repository structure
+## Backend structure
 
 ```text
-Progress-Tracker/
-├── web/          React web application
-├── backend/      Node.js + Express REST API
-├── android/      Kotlin + Jetpack Compose application (later stage)
-├── docs/         Architecture and engineering documentation
-├── .gitignore
-└── README.md
+backend/
+├── app/
+│   ├── Enums/
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   ├── Middleware/
+│   │   └── Requests/
+│   ├── Models/
+│   ├── Services/
+│   └── Support/
+├── bootstrap/
+├── config/
+├── database/
+│   ├── migrations/
+│   └── seeders/
+├── public/
+├── routes/
+├── storage/
+├── tests/
+├── artisan
+├── composer.json
+└── .env.example
 ```
 
-## Core roles
+## Requirements
 
-- `ADMIN` — full administrative access.
-- `MANAGER` — student registration, dormitory/Halaqah placement, activities.
-- `TEACHER` — daily memorization-progress recording and supervised-student reports.
-- `STUDENT` — personal memorization progress.
-- `PARENT` — child progress.
+- PHP 8.3+
+- Composer 2
+- MySQL 8+
+- PHP extensions required by Laravel: Ctype, cURL, DOM, Fileinfo, Filter, Hash, Mbstring, OpenSSL, PCRE, PDO, Session, Tokenizer, XML
+- `pdo_mysql`
+- Node.js 20+ / npm for the web client
+- Java 17 + Gradle/Android Studio only when building Android
 
-## Backend engineering approach
+## First local setup
 
-The server uses a layered modular architecture:
+Create the database:
+
+```sql
+CREATE DATABASE progress_tracker
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+```
+
+Then configure Laravel:
+
+```powershell
+cd backend
+composer install
+Copy-Item .env.example .env
+php artisan key:generate
+```
+
+Edit `backend/.env` and set your MySQL credentials:
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=progress_tracker
+DB_USERNAME=root
+DB_PASSWORD=your_mysql_password
+```
+
+Create the schema and development seed:
+
+```powershell
+php artisan migrate:fresh --seed
+php artisan storage:link
+```
+
+Default local Admin credentials:
 
 ```text
-HTTP Request
-   ↓
-Route
-   ↓
-Controller
-   ↓
-Service / Business Rules
-   ↓
-Repository / Prisma
-   ↓
-PostgreSQL
+ADMIN001
+ChangeMe123!
 ```
 
-Cross-cutting concerns such as authentication, authorization, validation, error handling, security headers, and logging are implemented through middleware.
+Change this password before any real deployment.
 
-## Data model direction
+Start the complete local application from the repository root:
 
-The design follows the project proposal and includes these core entities:
+```powershell
+.\dev.cmd
+```
 
-- users
-- students
-- halaqahs
-- dormitory assignments
-- progress entries
-- schedule periods
-- activities
+Or run Laravel manually:
 
-The prototype begins with the user, Halaqah, dormitory, and Student relationships required for Admin account creation. Progress/reporting entities remain in the schema so later stages do not require a destructive redesign.
+```powershell
+cd backend
+php artisan serve --host=127.0.0.1 --port=4000
+```
 
-## Git workflow
+API health check:
+
+```text
+http://127.0.0.1:4000/api/health
+```
+
+Web client:
+
+```text
+http://localhost:5173
+```
+
+## Database workflow
+
+Do not manually edit production tables. Change the schema through Laravel migrations:
+
+```powershell
+php artisan make:migration ...
+php artisan migrate
+```
+
+Use Eloquent or the Laravel query builder for application queries and transactions for multi-table writes.
+
+## Testing and quality
+
+```powershell
+cd backend
+vendor\bin\pint --test
+php artisan test
+php artisan route:list --path=api
+```
+
+The CI pipeline additionally starts MySQL 8, runs migrations/seeds, tests Laravel (including credential-vault authorization/encryption/audit behavior), builds React, and builds the Android debug APK.
+
+See `docs/SECURITY_DECISIONS.md` for the documented credential-vault trade-off and mitigations.
+
+## University deployment
+
+The web server document root must point to **`backend/public`**, never the Laravel project root. Set production values in `backend/.env`, ensure `storage` and `bootstrap/cache` are writable, and run:
+
+```bash
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force
+php artisan storage:link
+php artisan optimize
+```
+
+The React client should use:
+
+```dotenv
+VITE_API_URL=https://your-university-host/api
+```
+
+## Branch workflow
 
 ```text
 feature/* → development → main
 ```
 
-Work is implemented on feature branches, integrated and tested on `development`, and merged to `main` only after verification.
-
-## Local development
-
-Requirements:
-
-- Node.js 20+
-- npm
-- PostgreSQL
-- Git
-
-Never commit `.env` files. Copy the provided `.env.example` files to `.env` locally and replace development values as needed.
-
-Implementation is currently taking place on `feature/prototype-foundation`.
+The framework migration is being verified on `feature/laravel-mysql-backend`.
