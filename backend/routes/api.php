@@ -75,16 +75,17 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('/progress/students', [ProgressController::class, 'students'])->middleware('role:ADMIN,MANAGER,TEACHER');
     Route::get('/progress/children', [ProgressController::class, 'children'])->middleware('role:PARENT');
     Route::get('/progress', [ProgressController::class, 'index']);
-    Route::post('/progress', [ProgressController::class, 'store'])->middleware('role:ADMIN,TEACHER');
-    Route::patch('/progress/{entry}', [ProgressController::class, 'update'])->middleware('role:ADMIN,TEACHER');
-    Route::delete('/progress/{entry}', [ProgressController::class, 'destroy'])->middleware('role:ADMIN,TEACHER');
+    Route::post('/progress', [ProgressController::class, 'store'])->middleware('role:TEACHER');
+    Route::patch('/progress/{entry}', [ProgressController::class, 'update'])->middleware('role:TEACHER');
+    Route::delete('/progress/{entry}', [ProgressController::class, 'destroy'])->middleware('role:TEACHER');
 
     Route::get('/operations/leaves', [OperationsController::class, 'leaves'])->middleware('role:ADMIN,MANAGER,TEACHER,STUDENT');
     Route::post('/operations/leaves', [OperationsController::class, 'storeLeave'])->middleware('role:ADMIN,MANAGER,TEACHER,STUDENT');
     Route::get('/operations/notes', [OperationsController::class, 'notes'])->middleware('role:ADMIN,MANAGER,TEACHER');
     Route::post('/operations/notes', [OperationsController::class, 'storeNote'])->middleware('role:ADMIN,MANAGER,TEACHER');
-    Route::get('/operations/monthly-tests', [OperationsController::class, 'monthlyTests'])->middleware('role:ADMIN,TEACHER');
-    Route::post('/operations/monthly-tests', [OperationsController::class, 'storeMonthlyTest'])->middleware('role:ADMIN,TEACHER');
+    Route::get('/operations/monthly-test-students', [OperationsController::class, 'monthlyTestStudents'])->middleware('role:TEACHER');
+    Route::get('/operations/monthly-tests', [OperationsController::class, 'monthlyTests'])->middleware('role:TEACHER');
+    Route::post('/operations/monthly-tests', [OperationsController::class, 'storeMonthlyTest'])->middleware('role:TEACHER');
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead'])->middleware('role:STUDENT');
