@@ -122,14 +122,25 @@ class OperationsController extends Controller
         return response()->json(['note' => ApiPresenter::note($note), 'message' => 'تم حفظ الملاحظة'], 201);
     }
 
-    public function monthlyTests(Request $request): JsonResponse
+    public function monthlyTestStudents(): JsonResponse
     {
-        $actor = $request->user();
-        $query = MonthlyTest::query()->with(['student.user','examiner','halaqah','questions'])->latest('test_date');
+        $students = Student::query()
+            ->with(['user','halaqah.teacher','dormitory'])
+            ->whereHas('user', fn ($query) => $query->where('is_active', true))
+            ->get()
+            ->sortBy(fn (Student $student) => $student->user->full_name, SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
 
-        if ($actor->role === Role::Teacher) {
-            $query->whereHas('halaqah', fn ($q) => $q->where('teacher_id', $actor->id));
-        }
+        return response()->json([
+            'students' => $students->map(fn (Student $student) => ApiPresenter::student($student))->values(),
+        ]);
+    }
+
+    public function monthlyTests(): JsonResponse
+    {
+        $query = MonthlyTest::query()
+            ->with(['student.user','examiner','halaqah','questions'])
+            ->latest('test_date');
 
         return response()->json([
             'tests' => $query->limit(200)->get()->map(fn ($test) => ApiPresenter::test($test))->values(),
@@ -141,10 +152,6 @@ class OperationsController extends Controller
         $data = $request->validated();
         $actor = $request->user();
         $student = Student::query()->with('halaqah')->findOrFail($data['studentId']);
-
-        if ($actor->role === Role::Teacher && $student->halaqah->teacher_id !== $actor->id) {
-            abort(403, 'لا يمكنك اختبار هذا الطالب');
-        }
 
         $test = DB::transaction(function () use ($data, $actor, $student) {
             $test = MonthlyTest::query()->create([
