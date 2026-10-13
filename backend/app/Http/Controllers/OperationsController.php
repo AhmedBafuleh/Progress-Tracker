@@ -42,16 +42,23 @@ class OperationsController extends Controller
             'reason' => ['nullable','string','max:4000'],
         ]);
 
+        $actor = $request->user();
+        $autoApproved = $actor->role === Role::Admin;
+
         $leave = LeaveRequest::query()->create([
-            'requester_id' => $request->user()->id,
+            'requester_id' => $actor->id,
             'type' => $data['type'],
             'from_date' => $data['fromDate'],
             'to_date' => $data['toDate'] ?? null,
             'reason' => $data['reason'] ?? null,
-            'status' => 'PENDING',
+            'status' => $autoApproved ? 'APPROVED' : 'PENDING',
+            'reviewed_by_id' => $autoApproved ? $actor->id : null,
         ])->load(['requester','reviewer']);
 
-        return response()->json(['request' => ApiPresenter::leave($leave), 'message' => 'تم إرسال طلب الإجازة'], 201);
+        return response()->json([
+            'request' => ApiPresenter::leave($leave),
+            'message' => $autoApproved ? 'تم اعتماد طلب الإجازة تلقائيًا' : 'تم إرسال طلب الإجازة',
+        ], 201);
     }
 
     public function reviewLeave(Request $request, LeaveRequest $leave): JsonResponse
