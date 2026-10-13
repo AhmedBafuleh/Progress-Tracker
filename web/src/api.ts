@@ -572,6 +572,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  listMonthlyTestStudents: () => request<{ students: StudentOption[] }>('/operations/monthly-test-students'),
   listMonthlyTests: () => request<{ tests: MonthlyTest[] }>('/operations/monthly-tests'),
   createMonthlyTest: (payload: Record<string, unknown>) =>
     request<{ test: MonthlyTest; message: string }>('/operations/monthly-tests', {
