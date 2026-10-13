@@ -54,10 +54,10 @@ class AdminController extends Controller
         }
 
         $prefix = match ($role) {
-            Role::Manager => 'M',
-            Role::Teacher => 'T',
-            Role::Student => 'S',
-            Role::Parent => 'P',
+            Role::Manager => 'MAN',
+            Role::Teacher => 'TEA',
+            Role::Student => 'STU',
+            Role::Parent => 'PAR',
             default => '',
         };
         $loginId = $prefix.$data['loginNumber'];
