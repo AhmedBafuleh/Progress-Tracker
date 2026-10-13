@@ -126,6 +126,9 @@ interface ProgressTrackerApi {
     suspend fun createNote(@Body request: CreateNoteRequest): NoteMutationResponse
 
     // Monthly tests
+    @GET("operations/monthly-test-students")
+    suspend fun monthlyTestStudents(): StudentsResponse
+
     @GET("operations/monthly-tests")
     suspend fun monthlyTests(): MonthlyTestsResponse
 
