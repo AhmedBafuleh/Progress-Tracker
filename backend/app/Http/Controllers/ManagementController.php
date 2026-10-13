@@ -78,7 +78,7 @@ class ManagementController extends Controller
         $data = $request->validate([
             'fullName' => ['sometimes', 'string', 'min:2', 'max:191'],
             'email' => ['sometimes', 'nullable', 'email', 'max:191', Rule::unique('users', 'email')->ignore($user->id)],
-            'mobile' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'mobile' => ['sometimes', 'nullable', 'regex:/^[0-9]{1,40}$/'],
             'address' => ['sometimes', 'nullable', 'string', 'max:500'],
             'age' => ['sometimes', 'nullable', 'integer', 'between:1,120'],
             'joinedAt' => ['sometimes', 'nullable', 'date'],
