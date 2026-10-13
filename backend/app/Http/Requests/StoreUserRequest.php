@@ -17,7 +17,7 @@ class StoreUserRequest extends FormRequest
             'password' => ['required', 'string', 'min:8', 'max:128'],
             'role' => ['required', Rule::in(['MANAGER','TEACHER','STUDENT','PARENT'])],
             'email' => ['nullable', 'email', 'max:191', 'unique:users,email'],
-            'mobile' => ['nullable', 'string', 'max:40'],
+            'mobile' => ['nullable', 'regex:/^[0-9]{1,40}$/'],
             'address' => ['nullable', 'string', 'max:500'],
             'age' => ['nullable', 'integer', 'between:1,120'],
             'joinedAt' => ['nullable', 'date'],
