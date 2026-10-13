@@ -631,8 +631,6 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
     if (isAdmin) {
       items.push(
         { id: 'halaqahs', label: 'الحلقات', icon: 'school', group: 'إدارة المركز' },
-        { id: 'record', label: 'تسجيل المتابعة', icon: 'edit', group: 'المتابعة الأكاديمية' },
-        { id: 'tests', label: 'الاختبارات الشهرية', icon: 'check', group: 'المتابعة الأكاديمية' },
       );
     }
     items.push(
@@ -800,8 +798,6 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
       {!loading && active === 'users' && <UsersManager users={users} halaqahs={halaqahs} isAdmin={isAdmin} onChanged={flash} onError={fail} />}
       {!loading && active === 'halaqahs' && isAdmin && <HalaqahManager halaqahs={halaqahs} teachers={teachers} onChanged={flash} onError={fail} />}
       {!loading && active === 'parents' && <ParentLinksManager users={users} links={links} onChanged={flash} onError={fail} />}
-      {!loading && active === 'record' && isAdmin && <DailyProgressRecorder user={user} onSaved={flash} />}
-      {!loading && active === 'tests' && isAdmin && <MonthlyTestsPanel user={user} />}
       {!loading && active === 'notes' && <NotesPanel user={user} />}
       {!loading && active === 'leaves' && <LeaveRequestsPanel user={user} />}
       {!loading && active === 'notifications' && <NotificationManagerPanel user={user} />}
