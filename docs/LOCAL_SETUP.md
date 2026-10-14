@@ -1,123 +1,125 @@
-# Local Prototype Setup
+# Local Setup — Laravel 13 + MySQL
 
-## 1. Prerequisites
+## 1. Requirements
 
 Install:
 
-- Node.js 20+
-- npm
-- PostgreSQL
+- PHP 8.3+
+- Composer 2
+- MySQL 8+
+- Node.js 20+ / npm
 - Git
+- Java 17 / Android Studio only if testing Android
 
-## 2. Check out the feature branch
+Laravel requires Ctype, cURL, DOM, Fileinfo, Filter, Hash, Mbstring, OpenSSL, PCRE, PDO, Session, Tokenizer and XML. This project also requires `pdo_mysql`.
 
-```bash
-git fetch origin
-git switch feature/prototype-foundation
+Verify:
+
+```powershell
+php -v
+php -m
+composer --version
+mysql --version
 ```
 
-## 3. Configure PostgreSQL
+## 2. Backend dependencies
 
-Create a local PostgreSQL database named `progress_tracker`.
-
-Example connection string:
-
-```text
-postgresql://postgres:postgres@localhost:5432/progress_tracker?schema=public
-```
-
-Use your own PostgreSQL username/password if they differ.
-
-## 4. Backend setup
-
-```bash
+```powershell
 cd backend
-npm install
+composer install
+Copy-Item .env.example .env
+php artisan key:generate
 ```
 
-Copy `.env.example` to `.env` and replace `DATABASE_URL` and `JWT_SECRET` with local values.
+## 3. MySQL
 
-PowerShell:
+Create the database once:
+
+```sql
+CREATE DATABASE progress_tracker
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+```
+
+Edit `backend/.env`:
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=progress_tracker
+DB_USERNAME=root
+DB_PASSWORD=your_mysql_password
+```
+
+Laravel is configured for `utf8mb4`, strict MySQL mode and InnoDB.
+
+## 4. Create tables and seed
+
+For the first local Laravel setup, the previous plain-PHP schema can be discarded:
 
 ```powershell
-Copy-Item .env.example .env
+php artisan migrate:fresh --seed
+php artisan storage:link
 ```
 
-Generate the Prisma client and create the initial database migration:
+The seed creates `ADMIN001` with the development password `ChangeMe123!`.
 
-```bash
-npx prisma generate
-npx prisma migrate dev --name init
-npm run prisma:seed
-```
+## 5. Run
 
-Start the API:
-
-```bash
-npm run dev
-```
-
-Expected health endpoint:
-
-```text
-http://localhost:4000/api/health
-```
-
-Expected development Admin credentials from the seed template:
-
-```text
-ID: ADMIN001
-Password: ChangeMe123!
-```
-
-These credentials are development-only and should be changed before any deployment.
-
-## 5. Web setup
-
-Open a second terminal:
-
-```bash
-cd web
-npm install
-```
-
-Copy `.env.example` to `.env`:
+Backend:
 
 ```powershell
-Copy-Item .env.example .env
+php artisan serve --host=127.0.0.1 --port=4000
 ```
 
-Start Vite:
+Web, in another terminal:
+
+```powershell
+cd ..\web
+npm.cmd install
+npm.cmd run dev
+```
+
+Or from the repository root:
+
+```powershell
+.\dev.cmd
+```
+
+## 6. Checks
+
+```powershell
+cd backend
+php artisan about
+php artisan route:list --path=api
+php artisan test
+```
+
+Open `http://127.0.0.1:4000/api/health`, then log into `http://localhost:5173`.
+
+## 7. Security differences from the prototype
+
+- Authentication uses Laravel Sanctum.
+- Authentication passwords are one-way hashed.
+- The required password-view feature is isolated in a separate encrypted credential vault.
+- Credential reveal is restricted to authorized Admin/Manager account-management scope, rate-limited, non-cacheable, and audit-logged.
+- Password reset updates the hash and encrypted vault copy together and revokes the user's existing API tokens.
+- Account deletion is a soft delete so academic records remain intact.
+- Uploaded files are stored through Laravel's public storage disk with MIME and size validation.
+- Authorization is enforced server-side with role middleware plus row-level checks.
+
+## 8. Production
+
+The university server must serve `backend/public`, not `backend`.
+
+Typical deployment:
 
 ```bash
-npm run dev
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force
+php artisan storage:link
+php artisan optimize
 ```
 
-Open:
-
-```text
-http://localhost:5173
-```
-
-## 6. Prototype verification checklist
-
-1. Public homepage loads in Arabic and RTL.
-2. Library page is accessible without login.
-3. Media/activities page is accessible without login.
-4. `ADMIN001` can log in and reaches the Admin dashboard.
-5. Admin can create a Halaqah.
-6. Admin can create Manager, Teacher, Student, and Parent accounts.
-7. Creating a Student requires Halaqah, building, and room.
-8. Newly created accounts appear in the Admin list.
-9. A non-Admin account can authenticate successfully.
-10. A non-Admin account is redirected to **لوحة التحكم قيد التطوير**.
-
-## 7. Branch policy
-
-Do not develop directly on `main`.
-
-```text
-feature/* -> development -> main
-```
-
-Run the local verification checklist before requesting merge into `development`.
+Never commit `.env`, and set `APP_DEBUG=false` in production.

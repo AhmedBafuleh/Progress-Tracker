@@ -1,11 +1,13 @@
-import { FormEvent, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import {
   api,
   clearToken,
+  hasSavedToken,
   saveToken,
   resolveMediaUrl,
   type Activity,
+  type DashboardSummary,
   type Halaqah,
   type HomeContent,
   type LibraryItem,
@@ -66,6 +68,33 @@ function accountPrefix(role: CreatableRole) {
 
 type ManagementTab = 'overview' | 'users' | 'halaqahs' | 'parents' | 'record' | 'tests' | 'notes' | 'leaves' | 'notifications' | 'library' | 'media' | 'home' | 'schedule' | 'reports' | 'ai';
 
+type DashboardResource =
+  | 'summary'
+  | 'users'
+  | 'halaqahs'
+  | 'teachers'
+  | 'links'
+  | 'library'
+  | 'media'
+  | 'home'
+  | 'periods'
+  | 'progress';
+
+function resourcesForManagementTab(tab: ManagementTab): DashboardResource[] {
+  switch (tab) {
+    case 'overview': return ['summary'];
+    case 'users': return ['users', 'halaqahs'];
+    case 'halaqahs': return ['halaqahs', 'teachers'];
+    case 'parents': return ['users', 'links'];
+    case 'library': return ['library'];
+    case 'media': return ['media'];
+    case 'home': return ['home'];
+    case 'schedule': return ['periods'];
+    case 'reports': return ['users', 'halaqahs', 'progress'];
+    default: return [];
+  }
+}
+
 type NavItem<T extends string> = { id: T; label: string; icon: IconName; group?: string };
 
 function routeForRole(role: Role) {
@@ -99,7 +128,7 @@ function BrandLogo() {
 function PublicLayout({ children, user }: { children: ReactNode; user: SessionUser | null }) {
   const [footerContent, setFooterContent] = useState<HomeContent>(initialHome);
   useEffect(() => {
-    void api.getHome().then((result) => setFooterContent(result.home)).catch(() => undefined);
+    void api.getHome().then((result) => { if (result.home) setFooterContent(result.home); }).catch(() => undefined);
   }, []);
 
   return (
@@ -141,7 +170,7 @@ function HomePage({ user }: { user: SessionUser | null }) {
   const [home, setHome] = useState<HomeContent>(initialHome);
 
   useEffect(() => {
-    void api.getHome().then((result) => setHome(result.home)).catch(() => undefined);
+    void api.getHome().then((result) => { if (result.home) setHome(result.home); }).catch(() => undefined);
   }, []);
 
   return (
@@ -575,7 +604,11 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
   const [home, setHome] = useState<HomeContent>(initialHome);
   const [periods, setPeriods] = useState<Period[]>([]);
   const [progress, setProgress] = useState<ProgressEntry[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const loadedResources = useRef<Set<DashboardResource>>(new Set());
+  const inFlightResources = useRef<Map<DashboardResource, Promise<void>>>(new Map());
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
@@ -598,8 +631,6 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
     if (isAdmin) {
       items.push(
         { id: 'halaqahs', label: 'الحلقات', icon: 'school', group: 'إدارة المركز' },
-        { id: 'record', label: 'تسجيل المتابعة', icon: 'edit', group: 'المتابعة الأكاديمية' },
-        { id: 'tests', label: 'الاختبارات الشهرية', icon: 'check', group: 'المتابعة الأكاديمية' },
       );
     }
     items.push(
@@ -619,60 +650,132 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
     return items;
   }, [isAdmin]);
 
-  async function refreshAll() {
-    setLoading(true);
-    setError('');
-    try {
-      const [u, h, t, p, l, m, hm, per, prog] = await Promise.all([
-        api.listUsers(),
-        api.listHalaqahs(),
-        api.listTeachers(),
-        api.listParentLinks(),
-        api.getManagedLibrary(),
-        api.getManagedMedia(),
-        api.getHome(),
-        api.listPeriods(),
-        api.listProgress(),
-      ]);
-      setUsers(u.users);
-      setHalaqahs(h.halaqahs);
-      setTeachers(t.teachers);
-      setLinks(p.links);
-      setLibrary(l.items);
-      setMedia(m.activities);
-      setHome(hm.home);
-      setPeriods(per.periods);
-      setProgress(prog.entries);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذر تحميل بيانات لوحة التحكم');
-    } finally {
-      setLoading(false);
-    }
+  function loadResource(resource: DashboardResource, force = false): Promise<void> {
+    const existing = inFlightResources.current.get(resource);
+    if (existing) return existing;
+    if (!force && loadedResources.current.has(resource)) return Promise.resolve();
+
+    const request = (async () => {
+      switch (resource) {
+        case 'summary': {
+          const result = await api.getDashboardSummary();
+          setSummary(result.summary);
+          break;
+        }
+        case 'users': {
+          const result = await api.listUsers();
+          setUsers(result.users);
+          break;
+        }
+        case 'halaqahs': {
+          const result = await api.listHalaqahs();
+          setHalaqahs(result.halaqahs);
+          break;
+        }
+        case 'teachers': {
+          const result = await api.listTeachers();
+          setTeachers(result.teachers);
+          break;
+        }
+        case 'links': {
+          const result = await api.listParentLinks();
+          setLinks(result.links);
+          break;
+        }
+        case 'library': {
+          const result = await api.getManagedLibrary();
+          setLibrary(result.items);
+          break;
+        }
+        case 'media': {
+          const result = await api.getManagedMedia();
+          setMedia(result.activities);
+          break;
+        }
+        case 'home': {
+          const result = await api.getHome();
+          if (result.home) setHome(result.home);
+          break;
+        }
+        case 'periods': {
+          const result = await api.listPeriods();
+          setPeriods(result.periods);
+          break;
+        }
+        case 'progress': {
+          const result = await api.listProgress();
+          setProgress(result.entries);
+          break;
+        }
+      }
+
+      loadedResources.current.add(resource);
+    })().finally(() => {
+      inFlightResources.current.delete(resource);
+    });
+
+    inFlightResources.current.set(resource, request);
+    return request;
   }
 
-  useEffect(() => { void refreshAll(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const resources = resourcesForManagementTab(active);
+
+    if (resources.every((resource) => loadedResources.current.has(resource))) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    void Promise.all(resources.map((resource) => loadResource(resource)))
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'تعذر تحميل بيانات الصفحة');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [active]);
 
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== mode) return <Navigate to={routeForRole(user.role)} replace />;
 
-  const activeUsers = users.filter((entry) => entry.isActive).length;
-  const studentUsers = users.filter((entry) => entry.role === 'STUDENT').length;
-  const avg = averageRating(progress);
+  const activeUsers = summary?.activeUsers ?? users.filter((entry) => entry.isActive).length;
+  const studentUsers = summary?.studentUsers ?? users.filter((entry) => entry.role === 'STUDENT').length;
+  const avg = summary?.averageRating ?? averageRating(progress);
 
-  function flash(message: string) { setNotice(message); setError(''); void refreshAll(); }
+  function flash(message: string) {
+    setNotice(message);
+    setError('');
+    loadedResources.current.delete('summary');
+
+    const resources = resourcesForManagementTab(active);
+    if (!resources.length) return;
+
+    setRefreshing(true);
+    void Promise.all(resources.map((resource) => loadResource(resource, true)))
+      .catch((err) => setError(err instanceof Error ? err.message : 'تعذر تحديث بيانات الصفحة'))
+      .finally(() => setRefreshing(false));
+  }
+
   function fail(message: string) { setError(message); setNotice(''); }
 
   return (
     <DashboardShell user={user} title={isAdmin ? 'لوحة الإدارة' : 'لوحة المشرف'} nav={nav} active={active} onChange={setActive} onLogout={onLogout}>
       <Notice message={notice} error={error} />
+      {refreshing && <div className="refreshing-indicator">جارٍ تحديث الصفحة...</div>}
       {loading && <div className="loading-panel">جارٍ تحميل البيانات...</div>}
       {!loading && active === 'overview' && (
         <>
           <div className="stat-grid">
             <StatCard label="الحسابات النشطة" value={activeUsers} />
             <StatCard label="الطلاب" value={studentUsers} />
-            <StatCard label="الحلقات" value={halaqahs.length} />
-            <StatCard label={isAdmin ? 'سجلات المتابعة' : 'مواد المكتبة'} value={isAdmin ? progress.length : library.length} />
+            <StatCard label="الحلقات" value={summary?.halaqahs ?? halaqahs.length} />
+            <StatCard label={isAdmin ? 'سجلات المتابعة' : 'مواد المكتبة'} value={isAdmin ? (summary?.progressRecords ?? progress.length) : ((summary?.libraryItems ?? library.length) + (summary?.mediaActivities ?? media.length))} />
           </div>
           <section className="admin-panel dashboard-welcome">
             <div>
@@ -682,12 +785,12 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
             </div>
             {isAdmin
               ? <div className="summary-ring"><strong>{avg.toFixed(1)}</strong><span>متوسط التقييم / 5</span></div>
-              : <div className="summary-ring"><strong>{library.length + media.length}</strong><span>مواد ومنشورات</span></div>}
+              : <div className="summary-ring"><strong>{(summary?.libraryItems ?? library.length) + (summary?.mediaActivities ?? media.length)}</strong><span>مواد ومنشورات</span></div>}
           </section>
           {isAdmin && (
             <section className="admin-panel">
               <div className="panel-heading"><div><span>آخر المتابعة</span><h2>أحدث سجلات الطلاب</h2></div></div>
-              <ProgressTable entries={progress.slice(0, 6)} compact />
+              <ProgressTable entries={summary?.latestProgress ?? progress.slice(0, 6)} compact />
             </section>
           )}
         </>
@@ -695,8 +798,6 @@ function ManagementDashboard({ user, onLogout, mode }: { user: SessionUser | nul
       {!loading && active === 'users' && <UsersManager users={users} halaqahs={halaqahs} isAdmin={isAdmin} onChanged={flash} onError={fail} />}
       {!loading && active === 'halaqahs' && isAdmin && <HalaqahManager halaqahs={halaqahs} teachers={teachers} onChanged={flash} onError={fail} />}
       {!loading && active === 'parents' && <ParentLinksManager users={users} links={links} onChanged={flash} onError={fail} />}
-      {!loading && active === 'record' && isAdmin && <DailyProgressRecorder user={user} onSaved={flash} />}
-      {!loading && active === 'tests' && isAdmin && <MonthlyTestsPanel user={user} />}
       {!loading && active === 'notes' && <NotesPanel user={user} />}
       {!loading && active === 'leaves' && <LeaveRequestsPanel user={user} />}
       {!loading && active === 'notifications' && <NotificationManagerPanel user={user} />}
@@ -756,7 +857,9 @@ function UsersManager({ users, halaqahs, isAdmin, onChanged, onError }: { users:
       const result = await api.getCredential(entry.id);
       setCredential(result);
       setModal({ type: 'credential', user: entry });
-    } catch (err) { onError(err instanceof Error ? err.message : 'تعذر عرض بيانات الدخول'); }
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'تعذر عرض بيانات الدخول');
+    }
   }
 
   function openEdit(entry: ManagedUser) {
@@ -839,8 +942,8 @@ function UsersManager({ users, halaqahs, isAdmin, onChanged, onError }: { users:
             </div>
           </label>
           <label>كلمة المرور<div className="password-field"><input dir="ltr" type={showPassword ? 'text' : 'password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} minLength={8} autoComplete="new-password" required /><button type="button" className="icon-button password-toggle" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div></label>
-          {(isStudent || isStaff) && <><label>رقم الجوال<input dir="ltr" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} required /></label><label>البريد الإلكتروني<input dir="ltr" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></label><label className="span-2">العنوان<input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required /></label><label>تاريخ الانضمام<DateField value={form.joinedAt} onChange={(value) => setForm({ ...form, joinedAt: value })} required /></label></>}
-          {form.role === 'PARENT' && <><label>رقم الجوال - اختياري<input dir="ltr" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} /></label><label>البريد الإلكتروني - اختياري<input dir="ltr" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label className="span-2">العنوان - اختياري<input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></label></>}
+          {(isStudent || isStaff) && <><label>رقم الجوال<input dir="ltr" type="text" inputMode="numeric" pattern="[0-9]*" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '') })} required /></label><label>البريد الإلكتروني<input dir="ltr" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></label><label className="span-2">العنوان<input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required /></label><label>تاريخ الانضمام<DateField value={form.joinedAt} onChange={(value) => setForm({ ...form, joinedAt: value })} required /></label></>}
+          {form.role === 'PARENT' && <><label>رقم الجوال - اختياري<input dir="ltr" type="text" inputMode="numeric" pattern="[0-9]*" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '') })} /></label><label>البريد الإلكتروني - اختياري<input dir="ltr" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label className="span-2">العنوان - اختياري<input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></label></>}
           {isStudent && <><label>العمر<input type="number" min={3} max={120} value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} required /></label><label>مقدار ما تم حفظه من القرآن<input value={form.memorizedAmount} onChange={(e) => setForm({ ...form, memorizedAmount: e.target.value })} placeholder="مثال: 5 أجزاء أو من الناس إلى يس" required /></label></>}
           {isStudent && <><label>الحلقة<select value={form.halaqahId} onChange={(e) => setForm({ ...form, halaqahId: e.target.value })} required><option value="">اختر الحلقة</option>{halaqahs.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>المبنى<input value={form.building} onChange={(e) => setForm({ ...form, building: e.target.value })} required /></label><label>الغرفة<input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} required /></label></>}
           <div className="form-actions"><button className="primary-button"><Icon name="plus" size={18} />حفظ الحساب</button></div>
@@ -852,10 +955,11 @@ function UsersManager({ users, halaqahs, isAdmin, onChanged, onError }: { users:
         <div className="table-wrap"><table><thead><tr><th>الاسم</th><th>المعرف</th><th>الدور</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>{users.map((entry) => <tr key={entry.id}><td>{entry.fullName}</td><td dir="ltr">{entry.loginId}</td><td>{roleLabels[entry.role]}</td><td><span className={`status-chip ${entry.isActive ? '' : 'status-off'}`}>{entry.isActive ? 'نشط' : 'موقوف'}</span></td><td>{canManage(entry) ? <div className="table-actions"><button className="table-action" onClick={() => void openCredential(entry)} disabled={!entry.passwordAvailable} title="عرض بيانات الدخول"><Icon name="eye" /></button><button className="table-action" onClick={() => { setModalPassword(''); setModal({ type: 'reset', user: entry }); }} title="تعديل كلمة المرور"><Icon name="key" /></button><button className="table-action" onClick={() => openEdit(entry)} title="تعديل الحساب"><Icon name="edit" /></button><button className="table-action danger" onClick={() => setModal({ type: 'delete', user: entry })} title="حذف الحساب"><Icon name="trash" /></button></div> : <span className="protected-label">محمي</span>}</td></tr>)}</tbody></table></div>
       </section>
 
-      {modal?.type === 'credential' && credential && <Modal title="بيانات الدخول" onClose={() => { setModal(null); setCredential(null); }} footer={<button className="primary-button" onClick={() => void navigator.clipboard.writeText(`${credential.loginId}\n${credential.password}`)}>نسخ البيانات</button>}><div className="credential-box"><div><span>معرف المستخدم</span><strong dir="ltr">{credential.loginId}</strong></div><div><span>كلمة المرور</span><strong dir="ltr">{credential.password}</strong></div></div></Modal>}
+      {modal?.type === 'credential' && credential && <Modal title="بيانات الدخول" onClose={() => { setModal(null); setCredential(null); }} footer={<button className="primary-button" onClick={() => void navigator.clipboard.writeText(`${credential.loginId}\n${credential.password}`)}>نسخ البيانات</button>}><div className="credential-box"><div><span>معرف المستخدم</span><strong dir="ltr">{credential.loginId}</strong></div><div><span>كلمة المرور</span><strong dir="ltr">{credential.password}</strong></div><p className="helper-text">يتم تسجيل عملية عرض بيانات الدخول لأغراض التدقيق.</p></div></Modal>}
+
       {modal?.type === 'reset' && <Modal title={`إعادة تعيين كلمة مرور ${modal.user.fullName}`} onClose={() => setModal(null)} footer={<><button className="secondary-button" onClick={() => setModal(null)}>إلغاء</button><button className="primary-button" onClick={() => void submitReset()}>حفظ كلمة المرور</button></>}><label className="modal-field">كلمة المرور الجديدة<div className="password-field"><input dir="ltr" type={showResetPassword ? 'text' : 'password'} value={modalPassword} onChange={(e) => setModalPassword(e.target.value)} minLength={8} /><button type="button" className="icon-button password-toggle" onClick={() => setShowResetPassword((v) => !v)}><Icon name={showResetPassword ? 'eyeOff' : 'eye'} /></button></div></label></Modal>}
-      {modal?.type === 'edit' && <Modal title={`تعديل حساب ${modal.user.fullName}`} onClose={() => setModal(null)} footer={<><button className="secondary-button" onClick={() => setModal(null)}>إلغاء</button><button className="primary-button" onClick={() => void submitEdit()}>حفظ التغييرات</button></>}><div className="modal-form"><label>الاسم الكامل<input value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} /></label><label>الجوال<input dir="ltr" value={editForm.mobile} onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })} /></label><label>البريد الإلكتروني<input dir="ltr" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></label><label>العنوان<input value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} /></label><label>تاريخ الانضمام<DateField value={editForm.joinedAt} onChange={(value) => setEditForm({ ...editForm, joinedAt: value })} /></label><label className="check-field"><input type="checkbox" checked={editForm.isActive} onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked })} />الحساب نشط</label>{modal.user.role === 'STUDENT' && <><label>العمر<input type="number" min={3} max={120} value={editForm.age} onChange={(e) => setEditForm({ ...editForm, age: e.target.value })} /></label><label>مقدار الحفظ<input value={editForm.memorizedAmount} onChange={(e) => setEditForm({ ...editForm, memorizedAmount: e.target.value })} /></label><label>الحلقة<select value={editForm.halaqahId} onChange={(e) => setEditForm({ ...editForm, halaqahId: e.target.value })}>{halaqahs.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><div className="split-fields"><label>المبنى<input value={editForm.building} onChange={(e) => setEditForm({ ...editForm, building: e.target.value })} /></label><label>الغرفة<input value={editForm.room} onChange={(e) => setEditForm({ ...editForm, room: e.target.value })} /></label></div></>}</div></Modal>}
-      {modal?.type === 'delete' && <Modal title="تأكيد حذف الحساب" onClose={() => setModal(null)} footer={<><button className="secondary-button" onClick={() => setModal(null)}>إلغاء</button><button className="danger-button" onClick={() => void submitDelete()}><Icon name="trash" size={18} />حذف نهائي</button></>}><div className="confirm-copy"><strong>{modal.user.fullName}</strong><p>سيتم حذف الحساب والبيانات التابعة التي يسمح النظام بحذفها. لا يمكن التراجع عن هذا الإجراء.</p></div></Modal>}
+      {modal?.type === 'edit' && <Modal title={`تعديل حساب ${modal.user.fullName}`} onClose={() => setModal(null)} footer={<><button className="secondary-button" onClick={() => setModal(null)}>إلغاء</button><button className="primary-button" onClick={() => void submitEdit()}>حفظ التغييرات</button></>}><div className="modal-form"><label>الاسم الكامل<input value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} /></label><label>الجوال<input dir="ltr" type="text" inputMode="numeric" pattern="[0-9]*" value={editForm.mobile} onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value.replace(/\D/g, '') })} /></label><label>البريد الإلكتروني<input dir="ltr" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></label><label>العنوان<input value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} /></label><label>تاريخ الانضمام<DateField value={editForm.joinedAt} onChange={(value) => setEditForm({ ...editForm, joinedAt: value })} /></label><label className="check-field"><input type="checkbox" checked={editForm.isActive} onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked })} />الحساب نشط</label>{modal.user.role === 'STUDENT' && <><label>العمر<input type="number" min={3} max={120} value={editForm.age} onChange={(e) => setEditForm({ ...editForm, age: e.target.value })} /></label><label>مقدار الحفظ<input value={editForm.memorizedAmount} onChange={(e) => setEditForm({ ...editForm, memorizedAmount: e.target.value })} /></label><label>الحلقة<select value={editForm.halaqahId} onChange={(e) => setEditForm({ ...editForm, halaqahId: e.target.value })}>{halaqahs.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><div className="split-fields"><label>المبنى<input value={editForm.building} onChange={(e) => setEditForm({ ...editForm, building: e.target.value })} /></label><label>الغرفة<input value={editForm.room} onChange={(e) => setEditForm({ ...editForm, room: e.target.value })} /></label></div></>}</div></Modal>}
+      {modal?.type === 'delete' && <Modal title="تأكيد حذف الحساب" onClose={() => setModal(null)} footer={<><button className="secondary-button" onClick={() => setModal(null)}>إلغاء</button><button className="danger-button" onClick={() => void submitDelete()}><Icon name="trash" size={18} />حذف الحساب</button></>}><div className="confirm-copy"><strong>{modal.user.fullName}</strong><p>سيُمنع الحساب من تسجيل الدخول مع الاحتفاظ بالسجل الأكاديمي المرتبط به.</p></div></Modal>}
     </>
   );
 }
@@ -1454,7 +1558,15 @@ export default function App() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    api.me().then((result) => setUser(result.user)).catch(() => clearToken()).finally(() => setChecking(false));
+    if (!hasSavedToken()) {
+      setChecking(false);
+      return;
+    }
+
+    api.me()
+      .then((result) => setUser(result.user))
+      .catch(() => clearToken())
+      .finally(() => setChecking(false));
   }, []);
 
   function logout() { clearToken(); setUser(null); window.location.href = '/login'; }

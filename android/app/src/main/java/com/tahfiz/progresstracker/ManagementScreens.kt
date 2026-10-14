@@ -201,7 +201,9 @@ fun UsersScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             IconButton(onClick = { editUser = account }) { Icon(Icons.Outlined.Edit, contentDescription = "تعديل") }
                             if (account.passwordAvailable) {
-                                IconButton(onClick = { viewModel.revealCredential(account.id) }) { Icon(Icons.Outlined.Key, contentDescription = "عرض بيانات الدخول") }
+                                IconButton(onClick = { viewModel.revealCredential(account.id) }) {
+                                    Icon(Icons.Outlined.Key, contentDescription = "عرض بيانات الدخول")
+                                }
                             }
                             IconButton(onClick = { resetUser = account }) { Icon(Icons.Outlined.LockReset, contentDescription = "إعادة تعيين كلمة المرور") }
                             IconButton(onClick = { deleteUser = account }) { Icon(Icons.Outlined.Delete, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error) }
@@ -243,7 +245,7 @@ fun UsersScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
         AlertDialog(
             onDismissRequest = { deleteUser = null },
             title = { Text("حذف الحساب") },
-            text = { Text("هل تريد حذف حساب ${account.fullName}؟ لن يسمح الخادم بالحذف إذا كان مرتبطًا بسجل أكاديمي محفوظ.") },
+            text = { Text("هل تريد حذف حساب ${account.fullName}؟ سيُمنع تسجيل الدخول مع الاحتفاظ بالسجل الأكاديمي المرتبط به.") },
             confirmButton = {
                 TextButton(onClick = { viewModel.deleteUser(account.id); deleteUser = null }) {
                     Text("حذف", color = MaterialTheme.colorScheme.error)
@@ -261,10 +263,16 @@ fun UsersScreen(state: TahfizUiState, viewModel: TahfizViewModel) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     LabeledValue("المعرف", credential.loginId)
                     LabeledValue("كلمة المرور", credential.password)
-                    Text("لا تشارك هذه البيانات إلا مع صاحب الحساب.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    Text(
+                        "يتم تسجيل عملية عرض بيانات الدخول لأغراض التدقيق.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp,
+                    )
                 }
             },
-            confirmButton = { TextButton(onClick = viewModel::clearCredential) { Text("إغلاق") } },
+            confirmButton = {
+                TextButton(onClick = viewModel::clearCredential) { Text("إغلاق") }
+            },
         )
     }
 }
@@ -307,7 +315,7 @@ private fun CreateUserDialog(
                 item { OutlinedTextField(fullName, { fullName = it }, Modifier.fillMaxWidth(), label = { Text("الاسم الكامل") }) }
                 item { OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("كلمة المرور") }, singleLine = true) }
                 item { OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text("البريد الإلكتروني") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), singleLine = true) }
-                item { OutlinedTextField(mobile, { mobile = it }, Modifier.fillMaxWidth(), label = { Text("رقم الجوال") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), singleLine = true) }
+                item { OutlinedTextField(mobile, { mobile = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("رقم الجوال") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), singleLine = true) }
                 item { OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text("العنوان") }) }
                 if (role == "STUDENT") {
                     item { OutlinedTextField(age, { age = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("العمر") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true) }
@@ -379,7 +387,7 @@ private fun EditUserDialog(
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item { OutlinedTextField(fullName, { fullName = it }, Modifier.fillMaxWidth(), label = { Text("الاسم") }) }
                 item { OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text("البريد الإلكتروني") }) }
-                item { OutlinedTextField(mobile, { mobile = it }, Modifier.fillMaxWidth(), label = { Text("الجوال") }) }
+                item { OutlinedTextField(mobile, { mobile = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("الجوال") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), singleLine = true) }
                 item { OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text("العنوان") }) }
                 if (account.role != "PARENT") item { OutlinedTextField(joinedAt, { joinedAt = it }, Modifier.fillMaxWidth(), label = { Text("تاريخ الانضمام") }) }
                 if (account.role == "STUDENT") {

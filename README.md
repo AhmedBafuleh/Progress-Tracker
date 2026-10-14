@@ -2,109 +2,178 @@
 
 نظام إدارة ومتابعة تحفيظ القرآن الكريم.
 
-## Current implementation
+## Stack
 
-The web system now provides a complete role-based workflow backed by PostgreSQL and Prisma:
+The application uses:
 
-- Arabic-first, right-to-left public website.
-- Editable Home page content.
-- Editable Library page.
-- Editable Media and Activities page.
-- Authentication for Admin, Manager, Teacher, Student, and Parent.
-- Admin and Manager account management with role restrictions.
-- Student Halaqah and dormitory assignment.
-- Halaqah creation and teacher assignment.
-- Parent-to-student linking.
-- Schedule-period management.
-- Teacher daily memorization-progress entry.
-- Student personal progress dashboard.
-- Parent child-progress dashboard.
-- Administrative reports and progress summaries.
-- Password reveal/reset workflow for authorized roles.
-- Account activation/deactivation and protected deletion.
-
-## Permissions
-
-| Capability | Admin | Manager | Teacher | Student | Parent |
-| --- | --- | --- | --- | --- | --- |
-| Manage users | Full non-Admin management | Teacher / Student / Parent | No | No | No |
-| Create Manager | Yes | No | No | No | No |
-| Edit Home page | Yes | No | No | No | No |
-| Edit Library | Yes | Yes | No | No | No |
-| Edit Media | Yes | Yes | No | No | No |
-| Manage Halaqahs | Yes | Assignment through student management | No | No | No |
-| Record progress | View/report | View/report | Yes | No | No |
-| View own progress | Full reports | Full reports | Assigned students | Yes | Linked children |
-
-## Architecture
+- **Laravel 13 / PHP 8.3+** for the REST API.
+- **MySQL 8+** for persistent data.
+- **Laravel Sanctum** for bearer-token API authentication.
+- **Eloquent ORM + Laravel migrations** for the data layer.
+- React + TypeScript + Vite for the Arabic/RTL web client.
+- Kotlin + Jetpack Compose for Android.
 
 ```text
-React Web Client (Arabic / RTL)
-            |
-            | HTTPS / JSON REST API
-            v
-Node.js + Express Application Layer
-            |
-            | Prisma ORM
-            v
-        PostgreSQL
+React Web ─────┐
+               ├── HTTPS / JSON ──> Laravel 13 API ──> Eloquent ──> MySQL 8+
+Android App ───┘
 ```
 
-The Android application remains a separate Kotlin + Jetpack Compose client and will consume the same REST API without changing the backend architecture.
+The existing `/api/*` contract is retained for the web and Android clients. The project requirement that authorized Admin/Manager users can view managed-account credentials is preserved through a separate encrypted credential vault with audit logging; authentication itself still uses one-way password hashes.
 
-## Repository structure
+## Backend structure
 
 ```text
-Progress-Tracker/
-├── web/          React + Vite web application
-├── backend/      Node.js + Express REST API
-├── docs/         Architecture and engineering documentation
-├── dev.cmd       Starts backend and web locally on Windows
-├── .gitignore
-└── README.md
+backend/
+├── app/
+│   ├── Enums/
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   ├── Middleware/
+│   │   └── Requests/
+│   ├── Models/
+│   ├── Services/
+│   └── Support/
+├── bootstrap/
+├── config/
+├── database/
+│   ├── migrations/
+│   └── seeders/
+├── public/
+├── routes/
+├── storage/
+├── tests/
+├── artisan
+├── composer.json
+└── .env.example
 ```
 
-## Core roles
+## Requirements
 
-- `ADMIN` — full administrative access and Home/Library/Media content management.
-- `MANAGER` — user registration for Teacher/Student/Parent, student assignment, parent links, Library and Media management, and reports.
-- `TEACHER` — assigned-student access and daily memorization-progress recording.
-- `STUDENT` — personal memorization progress and history.
-- `PARENT` — linked child progress and history.
+- PHP 8.3+
+- Composer 2
+- MySQL 8+
+- PHP extensions required by Laravel: Ctype, cURL, DOM, Fileinfo, Filter, Hash, Mbstring, OpenSSL, PCRE, PDO, Session, Tokenizer, XML
+- `pdo_mysql`
+- Node.js 20+ / npm for the web client
+- Java 17 + Gradle/Android Studio only when building Android
 
-## Local development
+## First local setup
 
-Requirements:
+Create the database:
 
-- Node.js 20+
-- npm
-- PostgreSQL
-- Git
+```sql
+CREATE DATABASE progress_tracker
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+```
 
-Never commit `.env` files. Copy the provided `.env.example` files to `.env` locally and replace development values as needed.
-
-After pulling schema changes, run from `backend`:
+Then configure Laravel:
 
 ```powershell
-npx.cmd prisma migrate dev --name full_system
-npx.cmd prisma generate
-npm.cmd run prisma:seed
+cd backend
+composer install
+Copy-Item .env.example .env
+php artisan key:generate
 ```
 
-To start backend and web together on Windows, run from the repository root:
+Edit `backend/.env` and set your MySQL credentials:
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=progress_tracker
+DB_USERNAME=root
+DB_PASSWORD=your_mysql_password
+```
+
+Create the schema and development seed:
+
+```powershell
+php artisan migrate:fresh --seed
+php artisan storage:link
+```
+
+Default local Admin credentials:
+
+```text
+ADMIN001
+ChangeMe123!
+```
+
+Change this password before any real deployment.
+
+Start the complete local application from the repository root:
 
 ```powershell
 .\dev.cmd
 ```
 
-The backend is served at `http://localhost:4000` and the web client at `http://localhost:5173`.
+Or run Laravel manually:
 
-## Build verification
+```powershell
+cd backend
+php artisan serve --host=127.0.0.1 --port=4000
+```
 
-GitHub Actions runs backend and web build checks automatically on the feature, development, and main branches.
+API health check:
+
+```text
+http://127.0.0.1:4000/api/health
+```
+
+Web client:
+
+```text
+http://localhost:5173
+```
+
+## Database workflow
+
+Do not manually edit production tables. Change the schema through Laravel migrations:
+
+```powershell
+php artisan make:migration ...
+php artisan migrate
+```
+
+Use Eloquent or the Laravel query builder for application queries and transactions for multi-table writes.
+
+## Testing and quality
+
+```powershell
+cd backend
+vendor\bin\pint --test
+php artisan test
+php artisan route:list --path=api
+```
+
+The CI pipeline additionally starts MySQL 8, runs migrations/seeds, tests Laravel (including credential-vault authorization/encryption/audit behavior), builds React, and builds the Android debug APK.
+
+See `docs/SECURITY_DECISIONS.md` for the documented credential-vault trade-off and mitigations.
+
+## University deployment
+
+The web server document root must point to **`backend/public`**, never the Laravel project root. Set production values in `backend/.env`, ensure `storage` and `bootstrap/cache` are writable, and run:
+
+```bash
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force
+php artisan storage:link
+php artisan optimize
+```
+
+The React client should use:
+
+```dotenv
+VITE_API_URL=https://your-university-host/api
+```
+
+## Branch workflow
 
 ```text
 feature/* → development → main
 ```
 
-Implementation is currently taking place on `feature/prototype-foundation`.
+The framework migration is being verified on `feature/laravel-mysql-backend`.

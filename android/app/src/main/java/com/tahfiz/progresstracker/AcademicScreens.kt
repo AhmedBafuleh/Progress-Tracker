@@ -362,13 +362,19 @@ private fun MonthlyTestDialog(
     onDismiss: () -> Unit,
     onSubmit: (CreateMonthlyTestRequest) -> Unit,
 ) {
-    var studentId by remember { mutableStateOf(state.students.firstOrNull()?.id.orEmpty()) }
-    val selectedStudent = state.students.firstOrNull { it.id == studentId }
+    val testStudents = state.monthlyTestStudents
+    val testHalaqahs = testStudents.map { it.halaqah }.distinctBy { it.id }
+    var halaqahId by remember(testStudents) { mutableStateOf(testHalaqahs.firstOrNull()?.id.orEmpty()) }
+    var studentId by remember(testStudents) { mutableStateOf(testStudents.firstOrNull { it.halaqah.id == halaqahId }?.id.orEmpty()) }
+    val filteredStudents = testStudents.filter { it.halaqah.id == halaqahId }
+    val selectedStudent = testStudents.firstOrNull { it.id == studentId }
     var type by remember { mutableStateOf("HIFZ") }
     var matnName by remember { mutableStateOf("") }
     var testDate by remember { mutableStateOf(todayIso()) }
     var note by remember { mutableStateOf("") }
     var questions by remember { mutableStateOf(listOf(QuestionDraft())) }
+
+    val score = if (questions.isEmpty()) 0 else Math.round(questions.count { it.correct } * 100.0 / questions.size).toInt()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -377,9 +383,20 @@ private fun MonthlyTestDialog(
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item {
                     SelectionField(
+                        "الحلقة",
+                        testHalaqahs.firstOrNull { it.id == halaqahId }?.name.orEmpty(),
+                        testHalaqahs.map { it.id to it.name },
+                        { selectedHalaqahId ->
+                            halaqahId = selectedHalaqahId
+                            studentId = testStudents.firstOrNull { it.halaqah.id == selectedHalaqahId }?.id.orEmpty()
+                        },
+                    )
+                }
+                item {
+                    SelectionField(
                         "الطالب",
                         selectedStudent?.user?.fullName.orEmpty(),
-                        state.students.map { it.id to "${it.user.fullName} — ${it.halaqah.name}" },
+                        filteredStudents.map { it.id to it.user.fullName },
                         { studentId = it },
                     )
                 }
@@ -500,6 +517,7 @@ private fun MonthlyTestDialog(
                             studentId = student.id,
                             type = type,
                             matnName = matnName.ifBlank { null },
+                            score = score,
                             testDate = testDate,
                             note = note.ifBlank { null },
                             questions = questions.mapIndexed { index, q ->
@@ -515,7 +533,7 @@ private fun MonthlyTestDialog(
                         ),
                     )
                 },
-            ) { Text("حفظ الاختبار") }
+            ) { Text("حفظ الاختبار — $score/100") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } },
     )

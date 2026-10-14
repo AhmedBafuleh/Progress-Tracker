@@ -37,7 +37,7 @@ export function DailyProgressRecorder({ user, onSaved }: { user: SessionUser; on
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ halaqahId: '', studentId: '', periodId: '', attended: true, recordType: 'HIFZ', surah: 'الفاتحة', verseFrom: 1, endSurah: '', verseTo: 1, matnName: '', matnFrom: '', matnTo: '', pages: 1, rating: 5, recordDate: today(), note: '' });
+  const [form, setForm] = useState({ halaqahId: '', studentId: '', periodId: '', attended: true, recordType: 'HIFZ', surah: 'الفاتحة', verseFrom: '1', endSurah: '', verseTo: '1', matnName: '', matnFrom: '', matnTo: '', pages: '1', rating: 5, recordDate: today(), note: '' });
 
   useEffect(() => {
     void Promise.all([api.listProgressStudents(), api.listPeriods()])
@@ -67,13 +67,18 @@ export function DailyProgressRecorder({ user, onSaved }: { user: SessionUser; on
     try {
       const payload: Record<string, unknown> = { studentId: form.studentId, periodId: form.periodId, attended: form.attended, recordDate: form.recordDate, note: form.note || null };
       if (form.attended) {
-        Object.assign(payload, { recordType: form.recordType, pages: form.pages, rating: form.rating });
+        Object.assign(payload, { recordType: form.recordType, pages: form.pages === '' ? 0 : Number(form.pages), rating: form.rating });
         if (form.recordType === 'MATN') Object.assign(payload, { matnName: form.matnName, matnFrom: form.matnFrom || null, matnTo: form.matnTo || null });
-        else Object.assign(payload, { surah: form.surah, verseFrom: form.verseFrom, endSurah: form.endSurah || form.surah, verseTo: form.verseTo });
+        else Object.assign(payload, {
+          surah: form.surah,
+          verseFrom: form.verseFrom === '' ? null : Number(form.verseFrom),
+          endSurah: form.endSurah || form.surah,
+          verseTo: form.verseTo === '' ? null : Number(form.verseTo),
+        });
       }
       const result = await api.createProgress(payload);
       setNotice(result.message); onSaved?.(result.message);
-      setForm((current) => ({ ...current, attended: true, recordType: 'HIFZ', surah: 'الفاتحة', verseFrom: 1, endSurah: '', verseTo: 1, matnName: '', matnFrom: '', matnTo: '', pages: 1, rating: 5, note: '' }));
+      setForm((current) => ({ ...current, attended: true, recordType: 'HIFZ', surah: 'الفاتحة', verseFrom: '1', endSurah: '', verseTo: '1', matnName: '', matnFrom: '', matnTo: '', pages: '1', rating: 5, note: '' }));
     } catch (err) { setError(messageOf(err, 'تعذر حفظ متابعة الطالب')); }
     finally { setSaving(false); }
   }
@@ -101,14 +106,14 @@ export function DailyProgressRecorder({ user, onSaved }: { user: SessionUser; on
         </div></div> : <div className="record-range-box"><strong>{recordTypeLabels[form.recordType]}</strong>
           <div className="quran-range-line"><label>السورة<SurahInput value={form.surah} onChange={(value) => {
             const max = ayahCountForSurah(value);
-            setForm({ ...form, surah: value, verseFrom: max ? Math.min(form.verseFrom, max) : form.verseFrom });
-          }} required /></label><label>من آية<input type="number" min={1} max={ayahCountForSurah(form.surah) || undefined} value={form.verseFrom} onChange={(e) => setForm({ ...form, verseFrom: Number(e.target.value) })} /></label></div>
+            setForm({ ...form, surah: value, verseFrom: max ? String(Math.min(Number(form.verseFrom || 1), max)) : form.verseFrom });
+          }} required /></label><label>من آية<input type="number" min={1} max={ayahCountForSurah(form.surah) || undefined} value={form.verseFrom} onChange={(e) => setForm({ ...form, verseFrom: e.target.value })} /></label></div>
           <div className="quran-range-line"><label>السورة<SurahInput value={form.endSurah} onChange={(value) => {
             const max = ayahCountForSurah(value || form.surah);
-            setForm({ ...form, endSurah: value, verseTo: max ? Math.min(form.verseTo, max) : form.verseTo });
-          }} placeholder="نفس السورة إذا تُرك فارغًا" /></label><label>إلى آية<input type="number" min={1} max={ayahCountForSurah(form.endSurah || form.surah) || undefined} value={form.verseTo} onChange={(e) => setForm({ ...form, verseTo: Number(e.target.value) })} /></label></div>
+            setForm({ ...form, endSurah: value, verseTo: max ? String(Math.min(Number(form.verseTo || 1), max)) : form.verseTo });
+          }} placeholder="نفس السورة إذا تُرك فارغًا" /></label><label>إلى آية<input type="number" min={1} max={ayahCountForSurah(form.endSurah || form.surah) || undefined} value={form.verseTo} onChange={(e) => setForm({ ...form, verseTo: e.target.value })} /></label></div>
         </div>}
-        <div className="record-row"><label>عدد الصفحات<input type="number" min={0} step="0.25" value={form.pages} onChange={(e) => setForm({ ...form, pages: Number(e.target.value) })} /></label><label>التقييم<select value={form.rating} onChange={(e) => setForm({ ...form, rating: Number(e.target.value) })}>{[5,4,3,2,1].map((r) => <option key={r} value={r}>{r} / 5</option>)}</select></label></div>
+        <div className="record-row"><label>عدد الصفحات<input type="number" min={0} step="0.25" value={form.pages} onChange={(e) => setForm({ ...form, pages: e.target.value })} /></label><label>التقييم<select value={form.rating} onChange={(e) => setForm({ ...form, rating: Number(e.target.value) })}>{[5,4,3,2,1].map((r) => <option key={r} value={r}>{r} / 5</option>)}</select></label></div>
       </>}
       {!form.attended && <div className="record-row"><label>الفترة<select value={form.periodId} onChange={(e) => setForm({ ...form, periodId: e.target.value })}>{periods.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.startTime})</option>)}</select></label><label>التاريخ<DateField value={form.recordDate} onChange={(value) => setForm({ ...form, recordDate: value })} required /></label></div>}
       <label>ملاحظة<textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label>
@@ -260,7 +265,7 @@ export function MonthlyTestsPanel({ user }: { user: SessionUser }) {
   const [students, setStudents] = useState<StudentOption[]>([]); const [tests, setTests] = useState<MonthlyTest[]>([]);
   const [questions, setQuestions] = useState<MonthlyTestQuestion[]>([{ questionNumber: 1, correct: true, surah: 'الفاتحة', ayah: 1, ayahTo: 1, referenceText: '' }]);
   const [form, setForm] = useState({ halaqahId: '', studentId: '', type: 'HIFZ', matnName: '', testDate: today(), note: '' }); const [notice, setNotice] = useState(''); const [error, setError] = useState('');
-  async function refresh() { try { const [s, t] = await Promise.all([api.listProgressStudents(), api.listMonthlyTests()]); setStudents(s.students); setTests(t.tests); const first = s.students[0]; setForm((current) => ({ ...current, halaqahId: current.halaqahId || first?.halaqah.id || '', studentId: current.studentId || first?.id || '' })); } catch (err) { setError(messageOf(err, 'تعذر تحميل الاختبارات')); } }
+  async function refresh() { try { const [s, t] = await Promise.all([api.listMonthlyTestStudents(), api.listMonthlyTests()]); setStudents(s.students); setTests(t.tests); const first = s.students[0]; setForm((current) => ({ ...current, halaqahId: current.halaqahId || first?.halaqah.id || '', studentId: current.studentId || first?.id || '' })); } catch (err) { setError(messageOf(err, 'تعذر تحميل الاختبارات')); } }
   useEffect(() => { void refresh(); }, []);
   useEffect(() => {
     if (!notice && !error) return;
@@ -273,7 +278,7 @@ export function MonthlyTestsPanel({ user }: { user: SessionUser }) {
   function addQuestion() { setQuestions((current) => [...current, { questionNumber: current.length + 1, correct: true, surah: 'الفاتحة', ayah: 1, ayahTo: 1, referenceText: '' }]); }
   function updateQuestion(index: number, patch: Partial<MonthlyTestQuestion>) { setQuestions((current) => current.map((q, i) => i === index ? { ...q, ...patch } : q)); }
   function removeQuestion(index: number) { setQuestions((current) => current.filter((_, i) => i !== index).map((q, i) => ({ ...q, questionNumber: i + 1 }))); }
-  async function submit(event: FormEvent) { event.preventDefault(); try { const result = await api.createMonthlyTest({ ...form, questions }); setNotice(result.message); setQuestions([{ questionNumber: 1, correct: true, surah: 'الفاتحة', ayah: 1, ayahTo: 1, referenceText: '' }]); setForm((current) => ({ ...current, note: '', matnName: '' })); await refresh(); } catch (err) { setError(messageOf(err, 'تعذر حفظ الاختبار')); } }
+  async function submit(event: FormEvent) { event.preventDefault(); try { const result = await api.createMonthlyTest({ ...form, score: scorePreview, questions }); setNotice(result.message); setQuestions([{ questionNumber: 1, correct: true, surah: 'الفاتحة', ayah: 1, ayahTo: 1, referenceText: '' }]); setForm((current) => ({ ...current, note: '', matnName: '' })); await refresh(); } catch (err) { setError(messageOf(err, 'تعذر حفظ الاختبار')); } }
   return <>
     <section className="admin-panel"><div className="panel-heading"><div><span>التقييم الشهري</span><h2>اختبار شهري جديد</h2></div><div className="test-score-preview"><strong>{scorePreview}</strong><span>/100</span></div></div>{notice && <div className="success-box">{notice}</div>}{error && <div className="error-box">{error}</div>}
       {students.length ? <form onSubmit={submit}><div className="record-row monthly-test-header"><label>الحلقة<select value={form.halaqahId} onChange={(e) => chooseHalaqah(e.target.value)}>{halaqahs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label><label>الطالب<select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>{filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.user.fullName}</option>)}</select></label><label>نوع الاختبار<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}><option value="HIFZ">حفظ</option><option value="REVIEW">مراجعة</option><option value="MATN">متن</option></select></label><label>التاريخ<DateField value={form.testDate} onChange={(value) => setForm({ ...form, testDate: value })} required /></label></div>
@@ -287,11 +292,15 @@ export function MonthlyTestsPanel({ user }: { user: SessionUser }) {
               ayahTo: max ? Math.min(q.ayahTo || q.ayah || 1, max) : q.ayahTo,
             });
           }} required /></label>
-          <label>من آية<input type="number" min={1} max={ayahCountForSurah(q.surah) || undefined} value={q.ayah || 1} onChange={(e) => {
+          <label>من آية<input type="number" min={1} max={ayahCountForSurah(q.surah) || undefined} value={q.ayah ?? ''} onChange={(e) => {
+            if (e.target.value === '') {
+              updateQuestion(index, { ayah: undefined });
+              return;
+            }
             const next = Number(e.target.value);
             updateQuestion(index, { ayah: next, ayahTo: Math.max(next, q.ayahTo || next) });
           }} /></label>
-          <label>إلى آية<input type="number" min={q.ayah || 1} max={ayahCountForSurah(q.surah) || undefined} value={q.ayahTo || q.ayah || 1} onChange={(e) => updateQuestion(index, { ayahTo: Number(e.target.value) })} /></label>
+          <label>إلى آية<input type="number" min={q.ayah || 1} max={ayahCountForSurah(q.surah) || undefined} value={q.ayahTo ?? ''} onChange={(e) => updateQuestion(index, { ayahTo: e.target.value === '' ? undefined : Number(e.target.value) })} /></label>
         </>}<label>الإجابة<select value={q.correct ? 'TRUE' : 'FALSE'} onChange={(e) => updateQuestion(index, { correct: e.target.value === 'TRUE' })}><option value="TRUE">صحيح</option><option value="FALSE">خطأ</option></select></label>{questions.length > 1 && <button type="button" className="table-action danger" onClick={() => removeQuestion(index)}><Icon name="trash" /></button>}</div>)}<button type="button" className="secondary-button compact-button add-question" onClick={addQuestion}><Icon name="plus" size={17} />إضافة سؤال</button></div>
         <label className="standalone-field">ملاحظات عامة<textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></label><div className="form-actions"><button className="primary-button">حفظ الاختبار — {scorePreview}/100</button></div>
       </form> : <div className="empty-state"><strong>لا يوجد طلاب متاحون للاختبار</strong></div>}

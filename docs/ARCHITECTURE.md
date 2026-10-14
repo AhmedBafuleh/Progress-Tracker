@@ -1,91 +1,90 @@
 # System Architecture
 
-## 1. Architectural style
-
-The Tahfiz Progress Tracker follows a client-server, three-layer architecture:
-
-1. **Presentation layer** — React web client now; Kotlin + Jetpack Compose Android client later.
-2. **Application layer** — Node.js + Express REST API responsible for authentication, RBAC, validation, and domain logic.
-3. **Data layer** — PostgreSQL accessed through Prisma ORM.
-
-The web and Android clients must never connect directly to PostgreSQL. All access passes through the API.
-
-## 2. Prototype boundary
-
-The current academic prototype implements a complete vertical slice for public access and Admin user management. Manager, Teacher, Student, and Parent accounts are persisted and can authenticate, but their dashboards intentionally return the UI state **لوحة التحكم قيد التطوير** until later milestones.
-
-## 3. Domain roles
-
-| Role | Prototype status | Full-system responsibility |
-| --- | --- | --- |
-| ADMIN | Working dashboard | Full access, Halaqah/teacher management, schedules, institutional reports |
-| MANAGER | Account/auth only | Student registration, dormitory/Halaqah assignment, activities |
-| TEACHER | Account/auth only | Daily Hifz progress entry and supervised-student reports |
-| STUDENT | Account/auth only | Personal Hifz progress and history |
-| PARENT | Account/auth only | Child progress and reports |
-
-## 4. Backend module boundaries
+## Application layers
 
 ```text
-src/
-├── config/          environment and infrastructure configuration
-├── middleware/      auth, authorization, validation, error handling
-├── modules/
-│   ├── auth/        login and current-user identity
-│   ├── users/       Admin-managed accounts
-│   ├── students/    student profile and assignment data
-│   ├── halaqahs/    Halaqah records and teacher assignment
-│   └── dormitory/   dormitory building/room assignments
-├── shared/          reusable types/utilities
-├── app.ts           Express composition root
-└── server.ts        process entry point
+React Web ─────┐
+               │
+Android App ───┼── HTTPS / JSON REST API
+               │
+               v
+        Laravel 13 / PHP 8.3+
+               │
+        Controllers + Requests
+               │
+     Services / Authorization
+               │
+        Eloquent ORM
+               │
+               v
+             MySQL 8+
 ```
 
-Each domain module should separate HTTP concerns from business rules. Controllers translate HTTP requests/responses; services enforce rules; Prisma performs persistence.
+Clients never connect directly to MySQL.
 
-## 5. Security baseline
+## Backend conventions
 
-- Passwords are hashed using bcrypt; plaintext passwords are never persisted.
-- JWT access tokens identify authenticated users.
-- Role-based authorization is checked server-side, never only in the frontend.
-- Input is validated before reaching business logic.
-- Helmet security headers and restricted CORS are enabled.
-- Sensitive configuration is provided through environment variables.
-- API responses must not expose `passwordHash`.
+- `routes/api.php` contains the HTTP route map.
+- Controllers translate HTTP requests and responses.
+- Form Requests own reusable validation rules.
+- `EnsureRole` provides coarse role-based access control.
+- Controllers/services enforce row-level access, such as a teacher being restricted to assigned Halaqahs.
+- Eloquent models define domain relationships and casts.
+- Multi-table changes use database transactions.
+- Migrations are the source of truth for schema history.
+- Seeders create required development/bootstrap data.
+- Sanctum provides hashed bearer tokens for web/mobile API clients.
+- Recoverable managed-account credentials are isolated in a dedicated encrypted vault service and tables with audit logs.
+- Laravel Storage manages uploaded files.
 
-## 6. Arabic / RTL frontend
+## Database design
 
-Arabic is the prototype's presentation language. The web root uses `lang="ar"` and `dir="rtl"`. Layouts are designed RTL-first instead of mirroring an LTR layout as an afterthought. Internal source-code identifiers and API fields remain English for maintainability.
+The application uses ULID primary keys for domain entities while keeping indexes compact and predictable. Foreign keys enforce relationships, and composite indexes follow frequent access patterns such as:
 
-## 7. Core data relationships
+- student + progress date
+- teacher + progress date
+- Halaqah + test date
+- recipient + read state + notification date
+- status + leave-request date
 
-```text
-User
- ├── role: ADMIN | MANAGER | TEACHER | STUDENT | PARENT
- ├── Teacher profile (optional)
- ├── Student profile (optional)
- └── Parent relationship (later)
+MySQL runs with `utf8mb4`, InnoDB and strict mode.
 
-Halaqah
- └── assigned Teacher
+## Password handling
 
-Student
- ├── User
- ├── Halaqah
- └── DormitoryAssignment
+Authentication always uses the one-way hash stored in `users.password`.
 
-ProgressEntry (later dashboard stage)
- ├── Student
- ├── Teacher
- └── SchedulePeriod
-```
+Because this project explicitly requires authorized Admin/Manager users to view managed-account credentials, the recoverable copy is stored separately in `user_credentials`, encrypted with Laravel's application encryption key. Credential reveal is handled by `CredentialVaultService`, is separately rate-limited, returned with no-store cache headers, and creates an audit row in `credential_access_logs`.
 
-Dormitory and Halaqah configuration are stored as data rather than hardcoded UI values so the institution can change its structure without code changes.
+Password reset updates both representations inside one transaction and revokes the user's existing Sanctum tokens. See `docs/SECURITY_DECISIONS.md` for the rationale, trade-off, and mitigations.
 
-## 8. Git delivery workflow
+## Deletion
+
+User accounts use soft deletes. This protects academic/reporting history from accidental destructive account deletion while preventing the deleted account from authenticating.
+
+## API compatibility
+
+The endpoint families remain:
+
+- `/api/auth`
+- `/api/admin`
+- `/api/content`
+- `/api/management`
+- `/api/progress`
+- `/api/operations`
+- `/api/notifications`
+- `/api/reports`
+- `/api/ai`
+
+The credential-reveal endpoint remains available for authorized account-management users because it is an explicit project requirement; its implementation is isolated, encrypted, audited, rate-limited, and excluded from normal user payloads.
+
+## Deployment
+
+The HTTP document root must be `backend/public`. Secrets live in `backend/.env`, outside the public root and source control. Production deployments should run migrations and Laravel optimization commands after installing Composer dependencies.
+
+## Delivery
 
 ```text
 feature/* -> development -> main
 ```
 
-`development` is the integration branch. `main` represents verified stable work only.
+CI verifies Laravel against MySQL 8, checks formatting/tests/routes, builds React, and builds Android.

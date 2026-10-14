@@ -323,6 +323,17 @@ export type AiAnalysisResponse = {
   model: string;
 };
 
+export type DashboardSummary = {
+  activeUsers: number;
+  studentUsers: number;
+  halaqahs: number;
+  progressRecords: number;
+  libraryItems: number;
+  mediaActivities: number;
+  averageRating: number;
+  latestProgress: ProgressEntry[];
+};
+
 export type ParentLink = {
   id: string;
   createdAt: string;
@@ -336,6 +347,10 @@ export type ParentLink = {
 
 function getToken() {
   return localStorage.getItem('progress_tracker_token');
+}
+
+export function hasSavedToken() {
+  return Boolean(getToken());
 }
 
 export function saveToken(token: string) {
@@ -352,10 +367,15 @@ export function resolveMediaUrl(url: string) {
   return `${origin}${url.startsWith('/') ? url : `/${url}`}`;
 }
 
+let homeContentCache: HomeContent | null = null;
+let homeContentRequest: Promise<{ home: HomeContent }> | null = null;
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
+  headers.set('Accept', 'application/json');
+  headers.set('Accept', 'application/json');
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const response = await fetch(`${API_URL}${path}`, { ...init, headers });
@@ -378,16 +398,33 @@ export const api = {
 
   me: () => request<{ user: SessionUser; dashboardReady: boolean }>('/auth/me'),
 
-  getHome: () => request<{ home: HomeContent }>('/content/home'),
+  getHome: () => {
+    if (homeContentCache) return Promise.resolve({ home: homeContentCache });
+    if (homeContentRequest) return homeContentRequest;
+
+    homeContentRequest = request<{ home: HomeContent }>('/content/home')
+      .then((result) => {
+        if (result.home) homeContentCache = result.home;
+        return result;
+      })
+      .finally(() => {
+        homeContentRequest = null;
+      });
+
+    return homeContentRequest;
+  },
   getPublicLibrary: () => request<{ items: LibraryItem[] }>('/content/library'),
   getPublicMedia: () => request<{ activities: Activity[] }>('/content/media'),
   getManagedLibrary: () => request<{ items: LibraryItem[] }>('/content/library/manage'),
   getManagedMedia: () => request<{ activities: Activity[] }>('/content/media/manage'),
-  updateHome: (payload: HomeContent) =>
-    request<{ home: HomeContent; message: string }>('/content/home', {
+  updateHome: async (payload: HomeContent) => {
+    const result = await request<{ home: HomeContent; message: string }>('/content/home', {
       method: 'PUT',
       body: JSON.stringify(payload),
-    }),
+    });
+    homeContentCache = result.home;
+    return result;
+  },
   createLibraryItem: (payload: Record<string, unknown>) =>
     request<{ item: LibraryItem; message: string }>('/content/library', {
       method: 'POST',
@@ -401,6 +438,7 @@ export const api = {
   uploadLibraryFile: async (file: File) => {
     const token = getToken();
     const headers = new Headers();
+    headers.set('Accept', 'application/json');
     headers.set('Content-Type', file.type || 'application/octet-stream');
     headers.set('X-File-Name', encodeURIComponent(file.name));
     if (token) headers.set('Authorization', `Bearer ${token}`);
@@ -424,6 +462,7 @@ export const api = {
   uploadActivityAsset: async (activityId: string, file: File) => {
     const token = getToken();
     const headers = new Headers();
+    headers.set('Accept', 'application/json');
     headers.set('Content-Type', file.type || 'application/octet-stream');
     headers.set('X-File-Name', encodeURIComponent(file.name));
     if (token) headers.set('Authorization', `Bearer ${token}`);
@@ -464,6 +503,7 @@ export const api = {
   deleteUser: (userId: string) =>
     request<{ message: string }>(`/admin/users/${userId}`, { method: 'DELETE' }),
 
+  getDashboardSummary: () => request<{ summary: DashboardSummary }>('/management/dashboard-summary'),
   listTeachers: () => request<{ teachers: Teacher[] }>('/management/teachers'),
   updateHalaqah: (id: string, payload: Record<string, unknown>) =>
     request<{ halaqah: Halaqah; message: string }>(`/management/halaqahs/${id}`, {
@@ -532,6 +572,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  listMonthlyTestStudents: () => request<{ students: StudentOption[] }>('/operations/monthly-test-students'),
   listMonthlyTests: () => request<{ tests: MonthlyTest[] }>('/operations/monthly-tests'),
   createMonthlyTest: (payload: Record<string, unknown>) =>
     request<{ test: MonthlyTest; message: string }>('/operations/monthly-tests', {

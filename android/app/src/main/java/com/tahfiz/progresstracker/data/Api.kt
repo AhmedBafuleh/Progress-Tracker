@@ -44,6 +44,7 @@ interface ProgressTrackerApi {
     @DELETE("admin/users/{id}")
     suspend fun deleteUser(@Path("id") id: String): MessageResponse
 
+
     @GET("admin/users/{id}/credential")
     suspend fun credential(@Path("id") id: String): CredentialResponse
 
@@ -125,6 +126,9 @@ interface ProgressTrackerApi {
     suspend fun createNote(@Body request: CreateNoteRequest): NoteMutationResponse
 
     // Monthly tests
+    @GET("operations/monthly-test-students")
+    suspend fun monthlyTestStudents(): StudentsResponse
+
     @GET("operations/monthly-tests")
     suspend fun monthlyTests(): MonthlyTestsResponse
 
